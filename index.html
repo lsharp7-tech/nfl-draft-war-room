@@ -271,7 +271,7 @@
         <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Sort:</span>
         <button class="filter-btn active" id="sort-my" onclick="sortBoard('my',this)">My Board</button>
         <button class="filter-btn" id="sort-grade" onclick="sortBoard('grade',this)">Grade</button>
-        <button class="filter-btn" id="sort-espn" onclick="sortBoard('espn',this)">ESPN</button>
+        <button class="filter-btn" id="sort-espn" onclick="sortBoard('espn',this)">B/R</button>
         <button class="filter-btn" id="sort-pff" onclick="sortBoard('pff',this)">PFF</button>
         <button class="filter-btn" id="sort-pfsn" onclick="sortBoard('pfsn',this)">PFSN</button>
         <button class="filter-btn" id="sort-cbs" onclick="sortBoard('cbs',this)">CBS</button>
@@ -582,7 +582,7 @@ function renderBoard() {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
         <div class="ranking-chips">
-          <span class="chip chip-espn">ESPN ${p.espn > 0 && p.espn < 999 ? p.espn : '—'}</span>
+          <span class="chip chip-espn">B/R ${p.espn > 0 && p.espn < 999 ? p.espn : '—'}</span>
           <span class="chip chip-pff">PFF ${p.pff > 0 && p.pff < 999 ? p.pff : '—'}</span>
         </div>
         <div class="ranking-chips">
@@ -734,7 +734,7 @@ function renderProspectProfile(p) {
     <div class="section-title">Expert Rankings</div>
     <table class="rankings-table">
       <tr><th>Source</th><th>Rank</th><th>vs. Mine</th></tr>
-      ${[['ESPN', p.espn], ['PFF', p.pff], ['PFSN', p.pfsn], ['CBS Sports', p.cbs]].map(([src, r]) => {
+      ${[['B/R', p.espn], ['PFF', p.pff], ['PFSN', p.pfsn], ['CBS Sports', p.cbs]].map(([src, r]) => {
         const diff = rank - r;
         const diffStr = diff > 0 ? `<span style="color:var(--green)">+${diff}</span>` :
                         diff < 0 ? `<span style="color:var(--red)">${diff}</span>` :
@@ -805,7 +805,7 @@ async function askAI(question, prospectId) {
   const prospectCtx = p ? `
 Prospect: ${p.name} | Position: ${p.pos} | School: ${p.school}
 Measurables: ${p.height}, ${p.weight}lbs, ${p.forty}s 40, ${p.arm}" arm
-Grade: ${p.grade}/100 | ESPN: #${p.espn} | PFF: #${p.pff} | PFSN: #${p.pfsn} | CBS: #${p.cbs}
+Grade: ${p.grade}/100 | B/R: #${p.espn} | PFF: #${p.pff} | PFSN: #${p.pfsn} | CBS: #${p.cbs}
 My board rank: #${PROSPECTS.indexOf(p)+1}
 Scouting notes: ${p.notes}` : '';
 
@@ -886,7 +886,7 @@ function renderCompare() {
     { label:'40-Yard Dash',   keyA:a.forty+'s',       keyB:b.forty+'s',       numA:parseFloat(a.forty),numB:parseFloat(b.forty),higher:false },
     { label:'Arm Length',     keyA:a.arm+'"',          keyB:b.arm+'"',          numA:parseInt(a.arm),   numB:parseInt(b.arm),   higher:true  },
     { label:'Grade',          keyA:computeGrade(a),    keyB:computeGrade(b),    numA:computeGrade(a),    numB:computeGrade(b),    higher:true  },
-    { label:'ESPN Rank',      keyA:'#'+a.espn,         keyB:'#'+b.espn,         numA:a.espn,             numB:b.espn,             higher:false },
+    { label:'B/R Rank',       keyA:'#'+a.espn,         keyB:'#'+b.espn,         numA:a.espn,             numB:b.espn,             higher:false },
     { label:'PFF Rank',       keyA:'#'+a.pff,          keyB:'#'+b.pff,          numA:a.pff,              numB:b.pff,              higher:false },
     { label:'PFSN Rank',      keyA:'#'+a.pfsn,         keyB:'#'+b.pfsn,         numA:a.pfsn,             numB:b.pfsn,             higher:false },
     { label:'CBS Rank',       keyA:'#'+a.cbs,          keyB:'#'+b.cbs,          numA:a.cbs,              numB:b.cbs,              higher:false },
@@ -1046,7 +1046,7 @@ const SOURCES = {
     instructions: [
       'Paste any <strong>CSV or tab-separated</strong> data with a header row',
       'Required: <strong>Name</strong> and <strong>Position</strong> columns',
-      'Optional: School, Height, Weight, 40-Yard, Arm, Grade, ESPN, PFF, PFSN, CBS, Notes',
+      'Optional: School, Height, Weight, 40-Yard, Arm, Grade, B/R, PFF, PFSN, CBS, Notes',
       'You will map columns manually in the next step',
     ],
   },
@@ -1062,7 +1062,7 @@ const COL_FIELDS = [
   { key:'forty',  label:'40-Yard Dash',   required:false },
   { key:'arm',    label:'Arm Length',     required:false },
   { key:'grade',  label:'Grade',          required:false },
-  { key:'espn',   label:'ESPN Rank',      required:false },
+  { key:'espn',   label:'B/R Rank',       required:false },
   { key:'pff',    label:'PFF Rank',       required:false },
   { key:'pfsn',   label:'PFSN Rank',      required:false },
   { key:'cbs',    label:'CBS Rank',       required:false },
@@ -1083,7 +1083,7 @@ function autoDetectColumns(headers) {
     forty:  ['forty','40','40yard','40yd'],
     arm:    ['arm','armlength'],
     grade:  ['grade','score','rating'],
-    espn:   ['espn','espnrank','scoutsinc'],
+    espn:   ['espn','espnrank','scoutsinc','br','bleacher'],
     pff:    ['pff','pffrank'],
     pfsn:   ['pfsn','pfsnrank','nfln','nflnetwork'],
     cbs:    ['cbs','cbsrank'],
@@ -1101,7 +1101,25 @@ function autoDetectColumns(headers) {
   return map;
 }
 
+function parseBRFormat(text) {
+  // Bleacher Report format: "1. S Caleb Downs, Ohio State (9.3)"
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  const rows = [];
+  for (const line of lines) {
+    const m = line.match(/^(\d+)\.\s+(\S+)\s+(.+),\s+(.+?)\s+\(([\d.]+)\)\s*$/);
+    if (m) {
+      rows.push([m[1], m[3], m[2], m[4], m[5]]); // rank, name, pos, school, grade
+    }
+  }
+  if (rows.length < 3) return null;
+  return { headers: ['Rank', 'Name', 'Position', 'School', 'Grade'], rows };
+}
+
 function parseRawText(text) {
+  // Detect Bleacher Report format: "1. POS Name, School (grade)"
+  const brRows = parseBRFormat(text);
+  if (brRows) return brRows;
+
   // Detect PFF format: lines of [number, name, position, optional grade]
   const pffRows = parsePFFFormat(text);
   if (pffRows) return pffRows;
@@ -1309,7 +1327,7 @@ function renderImportStep() {
       </div>
       <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Which ranking does the rank column represent?</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
-        ${[['all','All Sources (first import)'],['espn','ESPN'],['pff','PFF'],['pfsn','PFSN'],['cbs','CBS'],['combine','Combine / RAS']].map(([k,l])=>`
+        ${[['all','All Sources (first import)'],['espn','B/R'],['pff','PFF'],['pfsn','PFSN'],['cbs','CBS'],['combine','Combine / RAS']].map(([k,l])=>`
           <button class="source-btn ${IMP.rankTarget===k?'active':''}" onclick="IMP.rankTarget='${k}';renderImportStep()">${l}</button>
         `).join('')}
       </div>
@@ -1322,7 +1340,7 @@ function renderImportStep() {
         Existing players get their ${IMP.rankTarget.toUpperCase()} rank updated by name match. New players are added with other sources set to unranked.
       </div>` : `
       <div style="background:#0a1a0a;border:1px solid var(--green);border-radius:8px;padding:12px 14px;font-size:12px;color:#6ee7b7;margin-bottom:16px;">
-        <strong>First import?</strong> Use <strong>All Sources</strong> to build your player list (e.g. from DraftTek). Then re-import with ESPN/PFF/PFSN/CBS selected to add accurate per-source rankings.
+        <strong>First import?</strong> Use <strong>All Sources</strong> to build your player list (e.g. from DraftTek). Then re-import with B/R/PFF/PFSN/CBS selected to add accurate per-source rankings.
       </div>`}
       <div class="import-instructions">
         <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">
@@ -1568,7 +1586,7 @@ function clearApiKey() {
 
 // ── EXPORT CSV ───────────────────────────────────────────────────────
 function exportCSV() {
-  const headers = ['Rank','Name','Pos','School','Height','Weight','40 Dash','Arm','RAS','Grade','ESPN','PFF','PFSN','CBS','Notes'];
+  const headers = ['Rank','Name','Pos','School','Height','Weight','40 Dash','Arm','RAS','Grade','B/R','PFF','PFSN','CBS','Notes'];
   const rows = PROSPECTS.map((p, i) => [
     i+1, p.name, p.pos, p.school, p.height,
     p.weight || '', p.forty, p.arm,
