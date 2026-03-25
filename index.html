@@ -66,7 +66,7 @@
   .search-bar { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; margin-bottom: 10px; }
   .search-bar:focus { outline: none; border-color: var(--gold); }
   .search-bar::placeholder { color: var(--muted); }
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; margin-bottom: 16px; }
   .filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
   .filter-btn.active { background: var(--gold); color: #000; border-color: var(--gold); }
   .filter-btn:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
@@ -318,7 +318,7 @@
       </div>
     </div>
     <input class="search-bar" id="search-input" type="text" placeholder="Search by name or school..." oninput="renderBoard()">
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--bg);">
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 16px 10px;border-bottom:1px solid var(--border);background:var(--bg);">
       <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Tools:</span>
       <button class="filter-btn" id="combine-toggle-btn" onclick="toggleCombineFilters()">📐 Combine Filters</button>
       <div style="width:1px;height:16px;background:var(--border);margin:0 4px;"></div>
