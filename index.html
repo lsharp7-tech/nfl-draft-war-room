@@ -260,6 +260,20 @@
   .rc-otis-output .otis-label { font-size:11px; color:var(--gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
   .rc-no-picks { font-size:12px; color:var(--border); font-style:italic; }
 
+  /* TRADE SIMULATOR */
+  .trade-layout { display:flex; gap:0; }
+  .trade-col { flex:1; border-right:1px solid var(--border); }
+  .trade-col:last-child { border-right:none; }
+  .trade-col-header { padding:12px 14px; border-bottom:1px solid var(--border); background:var(--bg); }
+  .trade-col-header select { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:6px 10px; color:var(--text); font-size:12px; font-family:'DM Sans',sans-serif; cursor:pointer; }
+  .trade-pick-row { display:flex; align-items:center; gap:8px; padding:8px 14px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; }
+  .trade-pick-row:hover { background:var(--surface2); }
+  .trade-pick-row.selected { background:#1a1400; border-left:3px solid var(--gold); padding-left:11px; }
+  .trade-pick-num { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); min-width:24px; }
+  .trade-footer { padding:14px 16px; border-top:1px solid var(--border); background:var(--bg); }
+  .trade-summary { font-size:12px; color:var(--muted); margin-bottom:10px; line-height:1.6; min-height:36px; }
+  .trade-via-badge { font-size:9px; background:var(--blue); color:#fff; border-radius:3px; padding:1px 5px; margin-left:4px; font-weight:700; }
+
   /* TIERS */
   .tier-header { display:flex; align-items:center; gap:8px; padding:7px 16px 5px; background:var(--surface); border-top:2px solid var(--gold); }
   .tier-label { font-family:'Bebas Neue',sans-serif; letter-spacing:1.5px; color:var(--gold); font-size:13px; flex:1; }
@@ -407,6 +421,7 @@
       <span id="mock-progress-counter" style="font-size:11px;color:var(--muted);white-space:nowrap;"></span>
       <button class="btn btn-outline" style="font-size:12px;" onclick="simAllRemaining()">⚡ Sim All</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="undoLastPick()">↩ Undo</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openTradeModal()">🔄 Trade</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="saveDraftAs()">💾 Save</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openLoadDraftModal()">📂 Load</button>
       <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
@@ -496,6 +511,24 @@
       <div class="detail-tab" id="mock-ptab-otis" onclick="switchMockProfileTab('otis')" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;">🐶 Otis</div>
     </div>
     <div id="mock-profile-content" style="max-height:65vh;overflow-y:auto;padding:16px;"></div>
+  </div>
+</div>
+
+<!-- TRADE SIMULATOR MODAL -->
+<div id="trade-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeTradeModal()">
+  <div class="modal-box" style="max-width:700px;">
+    <div class="modal-header">
+      <h2>🔄 Trade Picks</h2>
+      <button class="modal-close" onclick="closeTradeModal()">✕ Close</button>
+    </div>
+    <div class="trade-layout" id="trade-body" style="max-height:55vh;overflow-y:auto;"></div>
+    <div class="trade-footer">
+      <div class="trade-summary" id="trade-summary">Select picks on both sides to preview the trade.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-outline" onclick="closeTradeModal()">Cancel</button>
+        <button class="btn btn-gold" onclick="executeTrade()">🔄 Execute Trade</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2043,7 +2076,7 @@ const mockOtisHistories = new Map(); // persists per prospect while draft is ope
 let mockBoardSearch = '';
 
 function saveMockDraft() {
-  try { localStorage.setItem('nfl_mock_draft', JSON.stringify(MOCK_PICKS.map(p => ({ id: p.playerId, sim: p.simulated || false })))); } catch(e) {}
+  try { localStorage.setItem('nfl_mock_draft', JSON.stringify(MOCK_PICKS.map(p => ({ id: p.playerId, sim: p.simulated || false, owner: p.owner || null })))); } catch(e) {}
 }
 function loadMockDraft() {
   try {
@@ -2055,9 +2088,11 @@ function loadMockDraft() {
         if (d && typeof d === 'object') {
           MOCK_PICKS[i].playerId = d.id;
           MOCK_PICKS[i].simulated = d.sim || false;
+          MOCK_PICKS[i].owner = d.owner || null;
         } else {
           MOCK_PICKS[i].playerId = d; // backwards compat
           MOCK_PICKS[i].simulated = false;
+          MOCK_PICKS[i].owner = null;
         }
       });
     }
@@ -2072,7 +2107,7 @@ function getMockDraftBadge(playerId) {
 
 function resetMockDraft() {
   if (!confirm('Clear all mock draft picks?')) return;
-  MOCK_PICKS.forEach(p => p.playerId = null);
+  MOCK_PICKS.forEach(p => { p.playerId = null; p.owner = null; p.simulated = false; });
   selectedMockPick = null;
   saveMockDraft();
   renderMockDraft();
@@ -2103,10 +2138,13 @@ function renderMockPicks() {
     const isSelected = selectedMockPick === pick.pick;
     const isMine = isMyPick(pick);
     const myBadge = isMine ? `<span class="mock-my-badge">YOU</span>` : '';
+    const originalOwner = pick.team.replace(/\s*\(via[^)]*\)/i, '').trim();
+    const currentOwner = pickOwner(pick);
+    const viaBadge = pick.owner ? `<span class="trade-via-badge">via ${originalOwner}</span>` : '';
     html += `<div class="mock-pick-row ${isSelected ? 'selected' : ''} ${p ? 'filled' : ''} ${isMine ? 'my-pick' : ''}" onclick="selectMockPick(${pick.pick})">
       <span class="mock-pick-num">${pick.pick}</span>
       <div style="flex:1;min-width:0;">
-        <div class="mock-team">${pick.team}${myBadge}</div>
+        <div class="mock-team">${currentOwner}${myBadge}${viaBadge}</div>
         ${p
           ? `<div class="mock-player-name">${p.name} <span class="mock-player-pos">${p.pos}</span></div>`
           : `<div class="mock-empty">— No selection —</div>`}
@@ -2532,7 +2570,8 @@ const TEAM_NAME_MAP = {
   'L.A. Chargers':  'Los Angeles Chargers',
 };
 function pickOwner(pick) {
-  const t = pick.team.replace(/\s*\(via[^)]*\)/i, '').trim();
+  const base = pick.owner || pick.team;
+  const t = base.replace(/\s*\(via[^)]*\)/i, '').trim();
   return TEAM_NAME_MAP[t] || t;
 }
 
@@ -2868,6 +2907,119 @@ function loadProspects() {
       }
     }
   } catch(e) {}
+}
+
+// ── TRADE SIMULATOR ───────────────────────────────────────────────────
+let tradeTeamA = null;
+let tradeTeamB = null;
+let tradePicksA = new Set();
+let tradePicksB = new Set();
+
+function openTradeModal() {
+  tradeTeamA = myMockTeam || pickOwner(MOCK_PICKS[0]);
+  tradeTeamB = null;
+  tradePicksA = new Set();
+  tradePicksB = new Set();
+  document.getElementById('trade-modal').style.display = 'flex';
+  renderTradeModal();
+}
+
+function closeTradeModal() {
+  document.getElementById('trade-modal').style.display = 'none';
+}
+
+function getTeamList() {
+  return [...new Set(MOCK_PICKS.map(p => pickOwner(p)))].sort();
+}
+
+function renderTradeModal() {
+  const teams = getTeamList();
+  const teamOpts = (selected, exclude) => teams
+    .filter(t => t !== exclude)
+    .map(t => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t}</option>`)
+    .join('');
+
+  const picksForTeam = (team, selectedSet, side) => {
+    const picks = MOCK_PICKS.filter(p => pickOwner(p) === team);
+    if (!picks.length) return '<div style="padding:12px 14px;font-size:12px;color:var(--muted);">No picks</div>';
+    return picks.map(pick => {
+      const p = pick.playerId ? PROSPECTS.find(x => x.id === pick.playerId) : null;
+      const sel = selectedSet.has(pick.pick);
+      return `<div class="trade-pick-row ${sel ? 'selected' : ''}" onclick="toggleTradePick(${pick.pick},'${side}')">
+        <span class="trade-pick-num">#${pick.pick}</span>
+        <div style="flex:1;font-size:12px;">
+          <div style="font-weight:600;color:var(--text);">Round ${pick.round} · Pick ${pick.pick}</div>
+          ${p ? `<div style="color:var(--gold);font-size:11px;">${p.name} (${p.pos})</div>` : '<div style="color:var(--muted);font-size:11px;">— Empty —</div>'}
+        </div>
+        <div style="font-size:16px;">${sel ? '✓' : ''}</div>
+      </div>`;
+    }).join('');
+  };
+
+  const bodyA = tradeTeamA ? picksForTeam(tradeTeamA, tradePicksA, 'A') : '<div style="padding:12px 14px;font-size:12px;color:var(--muted);">Select a team</div>';
+  const bodyB = tradeTeamB ? picksForTeam(tradeTeamB, tradePicksB, 'B') : '<div style="padding:12px 14px;font-size:12px;color:var(--muted);">Select a team</div>';
+
+  document.getElementById('trade-body').innerHTML = `
+    <div class="trade-col">
+      <div class="trade-col-header">
+        <select onchange="setTradeTeam('A', this.value)">
+          <option value="">— Team A —</option>
+          ${teamOpts(tradeTeamA, tradeTeamB)}
+        </select>
+      </div>
+      <div>${bodyA}</div>
+    </div>
+    <div class="trade-col">
+      <div class="trade-col-header">
+        <select onchange="setTradeTeam('B', this.value)">
+          <option value="">— Team B —</option>
+          ${teamOpts(tradeTeamB, tradeTeamA)}
+        </select>
+      </div>
+      <div>${bodyB}</div>
+    </div>`;
+
+  updateTradeSummary();
+}
+
+function setTradeTeam(side, team) {
+  if (side === 'A') { tradeTeamA = team || null; tradePicksA = new Set(); }
+  else              { tradeTeamB = team || null; tradePicksB = new Set(); }
+  renderTradeModal();
+}
+
+function toggleTradePick(pickNum, side) {
+  const set = side === 'A' ? tradePicksA : tradePicksB;
+  if (set.has(pickNum)) set.delete(pickNum); else set.add(pickNum);
+  renderTradeModal();
+}
+
+function updateTradeSummary() {
+  const el = document.getElementById('trade-summary');
+  if (!el) return;
+  if (!tradeTeamA || !tradeTeamB) { el.textContent = 'Select two teams to begin.'; return; }
+  if (!tradePicksA.size && !tradePicksB.size) { el.textContent = 'Select picks on both sides to preview the trade.'; return; }
+
+  const fmtPicks = (set) => [...set].sort((a,b)=>a-b).map(n => `#${n}`).join(', ') || 'nothing';
+  el.innerHTML = `<strong>${tradeTeamA}</strong> receives: <span style="color:var(--gold)">${fmtPicks(tradePicksB)}</span><br>
+    <strong>${tradeTeamB}</strong> receives: <span style="color:var(--gold)">${fmtPicks(tradePicksA)}</span>`;
+}
+
+function executeTrade() {
+  if (!tradeTeamA || !tradeTeamB) { showToast('Select two teams first'); return; }
+  if (!tradePicksA.size && !tradePicksB.size) { showToast('Select picks to trade'); return; }
+  tradePicksA.forEach(pickNum => {
+    const pick = MOCK_PICKS.find(p => p.pick === pickNum);
+    if (pick) pick.owner = tradeTeamB;
+  });
+  tradePicksB.forEach(pickNum => {
+    const pick = MOCK_PICKS.find(p => p.pick === pickNum);
+    if (pick) pick.owner = tradeTeamA;
+  });
+  saveMockDraft();
+  closeTradeModal();
+  renderMockDraft();
+  showToast(`🔄 Trade complete: ${tradeTeamA} ↔ ${tradeTeamB}`);
 }
 
 // ── TIERS ─────────────────────────────────────────────────────────────
