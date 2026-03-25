@@ -234,6 +234,7 @@
   .mock-avail-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; border-radius:4px; }
   .mock-avail-row:hover { background:var(--surface2); }
   .mock-avail-row.drafted-out { opacity:0.3; pointer-events:none; }
+  .mock-avail-row.mock-need-match { border-left:3px solid var(--green); padding-left:7px; }
   .mock-hint { font-size:12px; color:var(--muted); padding:12px 16px; font-style:italic; }
 
   /* REPORT CARD */
@@ -1901,6 +1902,7 @@ const MOCK_PICKS = [
 ];
 
 let selectedMockPick = null;
+let mockBoardSort = 'my';
 
 function saveMockDraft() {
   try { localStorage.setItem('nfl_mock_draft', JSON.stringify(MOCK_PICKS.map(p => p.playerId))); } catch(e) {}
@@ -1965,32 +1967,80 @@ function renderMockPicks() {
   if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
 
+function setMockBoardSort(s) {
+  mockBoardSort = s;
+  renderMockBoard();
+}
+
+function sortedMockProspects() {
+  const arr = [...PROSPECTS];
+  if (mockBoardSort === 'my')   return arr; // already in board order
+  if (mockBoardSort === 'ras')  return arr.sort((a, b) => (b.ras || 0) - (a.ras || 0));
+  return arr.sort((a, b) => (a[mockBoardSort] || 999) - (b[mockBoardSort] || 999));
+}
+
 function renderMockBoard() {
   const panel = document.getElementById('mock-board-panel');
   if (!panel) return;
   const draftedIds = new Set(MOCK_PICKS.filter(p => p.playerId).map(p => p.playerId));
   const pick = MOCK_PICKS.find(p => p.pick === selectedMockPick);
+  const owner = pick ? pickOwner(pick) : null;
+  const needs = owner ? (TEAM_NEEDS[owner] || []) : [];
 
+  // Sort buttons
+  const sortBtns = [
+    ['my','My Board'], ['espn','B/R'], ['pff','PFF'],
+    ['pfsn','PFSN'], ['cbs','CBS'], ['ras','RAS'],
+  ].map(([k, l]) =>
+    `<button class="filter-btn ${mockBoardSort===k?'active':''}" onclick="setMockBoardSort('${k}')" style="font-size:11px;padding:4px 10px;">${l}</button>`
+  ).join('');
+
+  // Hint bar
   let hint = '';
   if (!selectedMockPick) {
     hint = `<div class="mock-hint">← Select a pick on the left to assign a player</div>`;
   } else {
-    hint = `<div class="mock-hint" style="color:var(--gold);">Assigning: Pick #${selectedMockPick} · ${pick?.team} — click a player below</div>`;
+    hint = `<div class="mock-hint" style="color:var(--gold);">Assigning: Pick #${selectedMockPick} · ${pick?.team}</div>`;
   }
 
-  const rows = PROSPECTS.map(p => {
+  // Team needs card
+  let needsCard = '';
+  if (owner && needs.length) {
+    const badges = needs.map(pos =>
+      `<span class="pos-badge pos-${pos}" style="font-size:10px;padding:2px 7px;">${pos}</span>`
+    ).join(' ');
+    needsCard = `
+      <div style="padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">${owner} Needs:</span>
+        ${badges}
+      </div>`;
+  }
+
+  // Sort bar
+  const sortBar = `
+    <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--surface);">
+      <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Sort:</span>
+      ${sortBtns}
+    </div>`;
+
+  // Player rows
+  const rows = sortedMockProspects().map(p => {
     const drafted = draftedIds.has(p.id);
-    return `<div class="mock-avail-row ${drafted ? 'drafted-out' : ''}" onclick="assignMockPick(${p.id})">
+    const fillsNeed = needs.includes(p.pos);
+    const needDot = fillsNeed && !drafted
+      ? `<span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;margin-right:4px;vertical-align:middle;" title="Fills a team need"></span>`
+      : '';
+    return `<div class="mock-avail-row ${drafted ? 'drafted-out' : ''} ${fillsNeed && !drafted ? 'mock-need-match' : ''}" onclick="assignMockPick(${p.id})">
       <span class="pos-badge pos-${p.pos}" style="font-size:10px;padding:2px 6px;">${p.pos}</span>
       <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;color:${drafted?'var(--muted)':'var(--text)'};">${p.name}</div>
+        <div style="font-size:13px;font-weight:600;color:${drafted?'var(--muted)':fillsNeed?'var(--text)':'var(--text)'};">${needDot}${p.name}</div>
         <div style="font-size:11px;color:var(--muted);">${p.school}</div>
       </div>
       <div style="font-family:'DM Mono',monospace;font-size:12px;color:${getGradeColor(computeGrade(p))}">${computeGrade(p)}</div>
     </div>`;
   }).join('');
 
-  panel.innerHTML = hint + rows;
+  panel.innerHTML = hint + needsCard + sortBar + rows;
 }
 
 function selectMockPick(pickNum) {
