@@ -2994,20 +2994,53 @@ function toggleTradePick(pickNum, side) {
   renderTradeModal();
 }
 
+// NFL draft pick value: exponential decay similar to Jimmy Johnson chart
+function pickTradeValue(pickNum) {
+  return Math.round(3000 * Math.pow(0.975, pickNum - 1));
+}
+
+function totalTradeValue(pickSet) {
+  return [...pickSet].reduce((sum, n) => sum + pickTradeValue(n), 0);
+}
+
+function tradeVerdict(valA, valB) {
+  // valA = what Team A is giving away, valB = what Team B is giving away
+  if (!valA && !valB) return null;
+  const ratio = valA > valB ? valA / Math.max(valB, 1) : valB / Math.max(valA, 1);
+  const favors = valA > valB ? tradeTeamB : tradeTeamA; // team receiving more value
+  if (ratio >= 3)   return { label: `🔴 Heavily favors ${favors}`, color: 'var(--red)', ratio, favors, warn: true };
+  if (ratio >= 1.7) return { label: `🟡 Advantage ${favors}`, color: '#e8a020', ratio, favors, warn: false };
+  return               { label: '🟢 Roughly fair trade', color: 'var(--green)', ratio, favors, warn: false };
+}
+
 function updateTradeSummary() {
   const el = document.getElementById('trade-summary');
   if (!el) return;
-  if (!tradeTeamA || !tradeTeamB) { el.textContent = 'Select two teams to begin.'; return; }
-  if (!tradePicksA.size && !tradePicksB.size) { el.textContent = 'Select picks on both sides to preview the trade.'; return; }
+  if (!tradeTeamA || !tradeTeamB) { el.innerHTML = 'Select two teams to begin.'; return; }
+  if (!tradePicksA.size && !tradePicksB.size) { el.innerHTML = 'Select picks on both sides to preview the trade.'; return; }
 
-  const fmtPicks = (set) => [...set].sort((a,b)=>a-b).map(n => `#${n}`).join(', ') || 'nothing';
-  el.innerHTML = `<strong>${tradeTeamA}</strong> receives: <span style="color:var(--gold)">${fmtPicks(tradePicksB)}</span><br>
-    <strong>${tradeTeamB}</strong> receives: <span style="color:var(--gold)">${fmtPicks(tradePicksA)}</span>`;
+  const valA = totalTradeValue(tradePicksA); // value Team A gives away
+  const valB = totalTradeValue(tradePicksB); // value Team B gives away
+  const verdict = tradeVerdict(valA, valB);
+  const fmtPicks = (set) => [...set].sort((a,b)=>a-b).map(n => `#${n} (${pickTradeValue(n).toLocaleString()} pts)`).join(', ') || 'nothing';
+
+  el.innerHTML = `
+    <div style="margin-bottom:8px;">
+      <strong>${tradeTeamA}</strong> gives: <span style="color:var(--muted);font-size:11px;">${fmtPicks(tradePicksA)}</span> <span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;">[${valA.toLocaleString()} pts]</span><br>
+      <strong>${tradeTeamB}</strong> gives: <span style="color:var(--muted);font-size:11px;">${fmtPicks(tradePicksB)}</span> <span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;">[${valB.toLocaleString()} pts]</span>
+    </div>
+    ${verdict ? `<div style="font-weight:700;color:${verdict.color};font-size:13px;">${verdict.label}${verdict.ratio > 1 ? ` (${verdict.ratio.toFixed(1)}× difference)` : ''}</div>` : ''}`;
 }
 
 function executeTrade() {
   if (!tradeTeamA || !tradeTeamB) { showToast('Select two teams first'); return; }
   if (!tradePicksA.size && !tradePicksB.size) { showToast('Select picks to trade'); return; }
+  const valA = totalTradeValue(tradePicksA);
+  const valB = totalTradeValue(tradePicksB);
+  const verdict = tradeVerdict(valA, valB);
+  if (verdict && verdict.warn) {
+    if (!confirm(`⚠️ This trade heavily favors ${verdict.favors} (${verdict.ratio.toFixed(1)}× difference in pick value). Are you sure you want to execute it?`)) return;
+  }
   tradePicksA.forEach(pickNum => {
     const pick = MOCK_PICKS.find(p => p.pick === pickNum);
     if (pick) pick.owner = tradeTeamB;
