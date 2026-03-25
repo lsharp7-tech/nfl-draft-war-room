@@ -2110,6 +2110,8 @@ function getMockDraftBadge(playerId) {
 function resetMockDraft() {
   if (!confirm('Clear all mock draft picks?')) return;
   MOCK_PICKS.forEach(p => { p.playerId = null; p.owner = null; p.simulated = false; });
+  FUTURE_PICKS.forEach(p => { p.owner = null; });
+  saveFuturePicks();
   selectedMockPick = null;
   saveMockDraft();
   renderMockDraft();
@@ -2916,12 +2918,51 @@ let tradeTeamA = null;
 let tradeTeamB = null;
 let tradePicksA = new Set();
 let tradePicksB = new Set();
+let tradeFuturePicksA = new Set();
+let tradeFuturePicksB = new Set();
+let FUTURE_PICKS = []; // [{id, year, round, originalTeam, owner}]
+
+function futurePickValue(year, round) {
+  const base = { 1:1800, 2:700, 3:280, 4:140, 5:80, 6:45, 7:25 }[round] || 25;
+  return Math.round(base * Math.pow(0.75, year - 2026));
+}
+function futurePickOwner(fp) { return fp.owner || fp.originalTeam; }
+
+function initFuturePicks() {
+  const teams = [...new Set(MOCK_PICKS.map(p => {
+    const t = p.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+    return TEAM_NAME_MAP[t] || t;
+  }))].sort();
+  FUTURE_PICKS = [];
+  [2027, 2028].forEach(year => {
+    teams.forEach(team => {
+      for (let r = 1; r <= 7; r++) {
+        FUTURE_PICKS.push({ id: `${year}-R${r}-${team}`, year, round: r, originalTeam: team, owner: null });
+      }
+    });
+  });
+}
+function saveFuturePicks() {
+  try {
+    const traded = FUTURE_PICKS.filter(p => p.owner).map(p => ({ id: p.id, owner: p.owner }));
+    localStorage.setItem('nfl_future_picks', JSON.stringify(traded));
+  } catch(e) {}
+}
+function loadFuturePicks() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('nfl_future_picks') || '[]');
+    saved.forEach(d => {
+      const fp = FUTURE_PICKS.find(p => p.id === d.id);
+      if (fp) fp.owner = d.owner;
+    });
+  } catch(e) {}
+}
 
 function openTradeModal() {
   tradeTeamA = myMockTeam || pickOwner(MOCK_PICKS[0]);
   tradeTeamB = null;
-  tradePicksA = new Set();
-  tradePicksB = new Set();
+  tradePicksA = new Set(); tradePicksB = new Set();
+  tradeFuturePicksA = new Set(); tradeFuturePicksB = new Set();
   document.getElementById('trade-modal').style.display = 'flex';
   renderTradeModal();
 }
@@ -2931,7 +2972,9 @@ function closeTradeModal() {
 }
 
 function getTeamList() {
-  return [...new Set(MOCK_PICKS.map(p => pickOwner(p)))].sort();
+  const cur = MOCK_PICKS.map(p => pickOwner(p));
+  const fut = FUTURE_PICKS.map(fp => futurePickOwner(fp));
+  return [...new Set([...cur, ...fut])].sort();
 }
 
 function renderTradeModal() {
@@ -2941,52 +2984,86 @@ function renderTradeModal() {
     .map(t => `<option value="${t}" ${t === selected ? 'selected' : ''}>${t}</option>`)
     .join('');
 
-  const picksForTeam = (team, selectedSet, side) => {
+  const sectionHeader = (label, color) =>
+    `<div style="padding:5px 14px;background:var(--bg);border-bottom:1px solid var(--border);font-size:10px;color:${color};text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">${label}</div>`;
+
+  const currentPicksHtml = (team, selSet, side) => {
     const picks = MOCK_PICKS.filter(p => pickOwner(p) === team);
-    if (!picks.length) return '<div style="padding:12px 14px;font-size:12px;color:var(--muted);">No picks</div>';
+    if (!picks.length) return '<div style="padding:8px 14px;font-size:11px;color:var(--muted);">No 2026 picks</div>';
     return picks.map(pick => {
       const p = pick.playerId ? PROSPECTS.find(x => x.id === pick.playerId) : null;
-      const sel = selectedSet.has(pick.pick);
-      return `<div class="trade-pick-row ${sel ? 'selected' : ''}" onclick="toggleTradePick(${pick.pick},'${side}')">
+      const sel = selSet.has(pick.pick);
+      return `<div class="trade-pick-row ${sel?'selected':''}" onclick="toggleTradePick(${pick.pick},'${side}')">
         <span class="trade-pick-num">#${pick.pick}</span>
         <div style="flex:1;font-size:12px;">
-          <div style="font-weight:600;color:var(--text);">Round ${pick.round} · Pick ${pick.pick}</div>
+          <div style="font-weight:600;color:var(--text);">Rd ${pick.round} · #${pick.pick} <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${pickTradeValue(pick.pick).toLocaleString()} pts</span></div>
           ${p ? `<div style="color:var(--gold);font-size:11px;">${p.name} (${p.pos})</div>` : '<div style="color:var(--muted);font-size:11px;">— Empty —</div>'}
         </div>
-        <div style="font-size:16px;">${sel ? '✓' : ''}</div>
+        <div style="font-size:16px;color:var(--gold);">${sel?'✓':''}</div>
       </div>`;
     }).join('');
   };
 
-  const bodyA = tradeTeamA ? picksForTeam(tradeTeamA, tradePicksA, 'A') : '<div style="padding:12px 14px;font-size:12px;color:var(--muted);">Select a team</div>';
-  const bodyB = tradeTeamB ? picksForTeam(tradeTeamB, tradePicksB, 'B') : '<div style="padding:12px 14px;font-size:12px;color:var(--muted);">Select a team</div>';
+  const futurePicksHtml = (team, selSet, side) => {
+    const fps = FUTURE_PICKS.filter(fp => futurePickOwner(fp) === team);
+    if (!fps.length) return '';
+    const byYear = {};
+    fps.forEach(fp => { if (!byYear[fp.year]) byYear[fp.year] = []; byYear[fp.year].push(fp); });
+    return Object.entries(byYear).sort().map(([year, picks]) =>
+      sectionHeader(`${year} Picks`, 'var(--blue)') +
+      picks.sort((a,b) => a.round - b.round).map(fp => {
+        const sel = selSet.has(fp.id);
+        const safeId = fp.id.replace(/'/g, "\\'");
+        return `<div class="trade-pick-row ${sel?'selected':''}" onclick="toggleFutureTradePick('${safeId}','${side}')">
+          <span class="trade-pick-num">R${fp.round}</span>
+          <div style="flex:1;font-size:12px;">
+            <div style="font-weight:600;color:var(--text);">${year} Round ${fp.round} <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${futurePickValue(fp.year,fp.round).toLocaleString()} pts</span></div>
+          </div>
+          <div style="font-size:16px;color:var(--gold);">${sel?'✓':''}</div>
+        </div>`;
+      }).join('')
+    ).join('');
+  };
+
+  const colBody = (team, pickSet, futSet, side) => {
+    if (!team) return '<div style="padding:12px 14px;font-size:12px;color:var(--muted);">Select a team</div>';
+    return sectionHeader('2026 Draft Picks', 'var(--muted)') +
+      currentPicksHtml(team, pickSet, side) +
+      futurePicksHtml(team, futSet, side);
+  };
 
   document.getElementById('trade-body').innerHTML = `
     <div class="trade-col">
       <div class="trade-col-header">
         <select onchange="setTradeTeam('A', this.value)">
-          <option value="">— Team A —</option>
-          ${teamOpts(tradeTeamA, tradeTeamB)}
+          <option value="">— Team A —</option>${teamOpts(tradeTeamA, tradeTeamB)}
         </select>
       </div>
-      <div>${bodyA}</div>
+      <div>${colBody(tradeTeamA, tradePicksA, tradeFuturePicksA, 'A')}</div>
     </div>
     <div class="trade-col">
       <div class="trade-col-header">
         <select onchange="setTradeTeam('B', this.value)">
-          <option value="">— Team B —</option>
-          ${teamOpts(tradeTeamB, tradeTeamA)}
+          <option value="">— Team B —</option>${teamOpts(tradeTeamB, tradeTeamA)}
         </select>
       </div>
-      <div>${bodyB}</div>
+      <div>${colBody(tradeTeamB, tradePicksB, tradeFuturePicksB, 'B')}</div>
     </div>`;
 
   updateTradeSummary();
 }
 
 function setTradeTeam(side, team) {
-  if (side === 'A') { tradeTeamA = team || null; tradePicksA = new Set(); }
-  else              { tradeTeamB = team || null; tradePicksB = new Set(); }
+  if (side === 'A') { tradeTeamA = team || null; tradePicksA = new Set(); tradeFuturePicksA = new Set(); }
+  else              { tradeTeamB = team || null; tradePicksB = new Set(); tradeFuturePicksB = new Set(); }
+  renderTradeModal();
+}
+
+function toggleFutureTradePick(id, side) {
+  const set = side === 'A' ? tradeFuturePicksA : tradeFuturePicksB;
+  if (set.has(id)) set.delete(id); else set.add(id);
+  const otisEl = document.getElementById('trade-otis-result');
+  if (otisEl) otisEl.style.display = 'none';
   renderTradeModal();
 }
 
@@ -3003,8 +3080,13 @@ function pickTradeValue(pickNum) {
   return Math.round(3000 * Math.pow(0.975, pickNum - 1));
 }
 
-function totalTradeValue(pickSet) {
-  return [...pickSet].reduce((sum, n) => sum + pickTradeValue(n), 0);
+function totalTradeValue(pickSet, futureSet) {
+  const cur = [...(pickSet||[])].reduce((s,n) => s + pickTradeValue(n), 0);
+  const fut = [...(futureSet||[])].reduce((s,id) => {
+    const fp = FUTURE_PICKS.find(p => p.id === id);
+    return s + (fp ? futurePickValue(fp.year, fp.round) : 0);
+  }, 0);
+  return cur + fut;
 }
 
 function tradeVerdict(valA, valB) {
@@ -3021,26 +3103,34 @@ function updateTradeSummary() {
   const el = document.getElementById('trade-summary');
   if (!el) return;
   if (!tradeTeamA || !tradeTeamB) { el.innerHTML = 'Select two teams to begin.'; return; }
-  if (!tradePicksA.size && !tradePicksB.size) { el.innerHTML = 'Select picks on both sides to preview the trade.'; return; }
+  const hasAny = tradePicksA.size || tradePicksB.size || tradeFuturePicksA.size || tradeFuturePicksB.size;
+  if (!hasAny) { el.innerHTML = 'Select picks on both sides to preview the trade.'; return; }
 
-  const valA = totalTradeValue(tradePicksA); // value Team A gives away
-  const valB = totalTradeValue(tradePicksB); // value Team B gives away
+  const valA = totalTradeValue(tradePicksA, tradeFuturePicksA);
+  const valB = totalTradeValue(tradePicksB, tradeFuturePicksB);
   const verdict = tradeVerdict(valA, valB);
-  const fmtPicks = (set) => [...set].sort((a,b)=>a-b).map(n => `#${n} (${pickTradeValue(n).toLocaleString()} pts)`).join(', ') || 'nothing';
+
+  const fmtCurrent = (set) => [...set].sort((a,b)=>a-b).map(n => `#${n} (${pickTradeValue(n).toLocaleString()} pts)`).join(', ');
+  const fmtFuture = (set) => [...set].map(id => {
+    const fp = FUTURE_PICKS.find(p => p.id === id);
+    return fp ? `${fp.year} R${fp.round} (${futurePickValue(fp.year,fp.round).toLocaleString()} pts)` : '';
+  }).filter(Boolean).join(', ');
+  const fmtSide = (pSet, fSet) => [fmtCurrent(pSet), fmtFuture(fSet)].filter(Boolean).join(', ') || 'nothing';
 
   el.innerHTML = `
     <div style="margin-bottom:8px;">
-      <strong>${tradeTeamA}</strong> gives: <span style="color:var(--muted);font-size:11px;">${fmtPicks(tradePicksA)}</span> <span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;">[${valA.toLocaleString()} pts]</span><br>
-      <strong>${tradeTeamB}</strong> gives: <span style="color:var(--muted);font-size:11px;">${fmtPicks(tradePicksB)}</span> <span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;">[${valB.toLocaleString()} pts]</span>
+      <strong>${tradeTeamA}</strong> gives: <span style="color:var(--muted);font-size:11px;">${fmtSide(tradePicksA,tradeFuturePicksA)}</span> <span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;">[${valA.toLocaleString()} pts]</span><br>
+      <strong>${tradeTeamB}</strong> gives: <span style="color:var(--muted);font-size:11px;">${fmtSide(tradePicksB,tradeFuturePicksB)}</span> <span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;">[${valB.toLocaleString()} pts]</span>
     </div>
     ${verdict ? `<div style="font-weight:700;color:${verdict.color};font-size:13px;">${verdict.label}${verdict.ratio > 1 ? ` (${verdict.ratio.toFixed(1)}× difference)` : ''}</div>` : ''}`;
 }
 
 function executeTrade() {
   if (!tradeTeamA || !tradeTeamB) { showToast('Select two teams first'); return; }
-  if (!tradePicksA.size && !tradePicksB.size) { showToast('Select picks to trade'); return; }
-  const valA = totalTradeValue(tradePicksA);
-  const valB = totalTradeValue(tradePicksB);
+  const hasAny = tradePicksA.size || tradePicksB.size || tradeFuturePicksA.size || tradeFuturePicksB.size;
+  if (!hasAny) { showToast('Select picks to trade'); return; }
+  const valA = totalTradeValue(tradePicksA, tradeFuturePicksA);
+  const valB = totalTradeValue(tradePicksB, tradeFuturePicksB);
   const verdict = tradeVerdict(valA, valB);
   if (verdict && verdict.warn) {
     if (!confirm(`⚠️ This trade heavily favors ${verdict.favors} (${verdict.ratio.toFixed(1)}× difference in pick value). Are you sure you want to execute it?`)) return;
@@ -3053,7 +3143,16 @@ function executeTrade() {
     const pick = MOCK_PICKS.find(p => p.pick === pickNum);
     if (pick) pick.owner = tradeTeamA;
   });
+  tradeFuturePicksA.forEach(id => {
+    const fp = FUTURE_PICKS.find(p => p.id === id);
+    if (fp) fp.owner = tradeTeamB;
+  });
+  tradeFuturePicksB.forEach(id => {
+    const fp = FUTURE_PICKS.find(p => p.id === id);
+    if (fp) fp.owner = tradeTeamA;
+  });
   saveMockDraft();
+  saveFuturePicks();
   closeTradeModal();
   renderMockDraft();
   showToast(`🔄 Trade complete: ${tradeTeamA} ↔ ${tradeTeamB}`);
@@ -3071,22 +3170,29 @@ async function tradeAskOtis() {
 
   const needsA = TEAM_NEEDS[tradeTeamA] || [];
   const needsB = TEAM_NEEDS[tradeTeamB] || [];
-  const valA = totalTradeValue(tradePicksA);
-  const valB = totalTradeValue(tradePicksB);
+  const valA = totalTradeValue(tradePicksA, tradeFuturePicksA);
+  const valB = totalTradeValue(tradePicksB, tradeFuturePicksB);
 
-  const formatPickDetails = (set, receivingTeam) => [...set].sort((a,b)=>a-b).map(n => {
+  const formatPickDetails = (set) => [...set].sort((a,b)=>a-b).map(n => {
     const pick = MOCK_PICKS.find(p => p.pick === n);
     const player = pick?.playerId ? PROSPECTS.find(x => x.id === pick.playerId) : null;
-    return `Pick #${n} (Round ${pick?.round}, ${pickTradeValue(n)} pts)${player ? ` — currently holds ${player.name} (${player.pos})` : ''}`;
+    return `Pick #${n} (Round ${pick?.round}, ${pickTradeValue(n)} pts)${player ? ` — ${player.name} (${player.pos})` : ''}`;
   }).join('\n');
+  const formatFutureDetails = (set) => [...set].map(id => {
+    const fp = FUTURE_PICKS.find(p => p.id === id);
+    return fp ? `${fp.year} Round ${fp.round} pick (${futurePickValue(fp.year,fp.round)} pts)` : '';
+  }).filter(Boolean).join('\n');
 
-  const prompt = `Analyze this 2026 NFL mock draft trade:
+  const sideA = [formatPickDetails(tradePicksB), formatFutureDetails(tradeFuturePicksB)].filter(Boolean).join('\n') || 'nothing';
+  const sideB = [formatPickDetails(tradePicksA), formatFutureDetails(tradeFuturePicksA)].filter(Boolean).join('\n') || 'nothing';
 
-${tradeTeamA} receives (${valB} trade value pts):
-${formatPickDetails(tradePicksB, tradeTeamA)}
+  const prompt = `Analyze this NFL trade involving 2026 and/or future draft picks:
 
-${tradeTeamB} receives (${valA} trade value pts):
-${formatPickDetails(tradePicksA, tradeTeamB)}
+${tradeTeamA} receives (${valB.toLocaleString()} trade value pts):
+${sideA}
+
+${tradeTeamB} receives (${valA.toLocaleString()} trade value pts):
+${sideB}
 
 ${tradeTeamA} top needs: ${needsA.join(', ')}
 ${tradeTeamB} top needs: ${needsB.join(', ')}
@@ -3294,6 +3400,8 @@ function deleteSavedDraft(name) {
 loadProspects();
 loadMockDraft();
 loadTiers();
+initFuturePicks();
+loadFuturePicks();
 renderBoard();
 </script>
 </body>
