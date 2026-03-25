@@ -1883,10 +1883,16 @@ function clearApiKey() {
 }
 
 // ── EXPORT CSV ───────────────────────────────────────────────────────
+function fmtHeight(h) {
+  if (!h || h === '—') return h;
+  const m = String(h).match(/^(\d+)-(\d+)$/);
+  return m ? `${m[1]}'${m[2]}"` : h;
+}
+
 function exportCSV() {
   const headers = ['Rank','Name','Pos','School','Height','Weight','40 Dash','RAS','Grade','B/R','PFF','PFSN','CBS','Notes'];
   const rows = PROSPECTS.map((p, i) => [
-    i+1, p.name, p.pos, p.school, p.height,
+    i+1, p.name, p.pos, p.school, fmtHeight(p.height),
     p.weight || '', p.forty,
     p.ras > 0 ? p.ras.toFixed(2) : '',
     computeGrade(p), p.espn < 999 ? p.espn : '', p.pff < 999 ? p.pff : '',
