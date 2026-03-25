@@ -23,6 +23,29 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
 
+  /* LIVE DRAFT */
+  .live-layout { display:flex; height:calc(100vh - 111px); overflow:hidden; }
+  .live-col { display:flex; flex-direction:column; overflow:hidden; }
+  .live-col-border { border-right:1px solid var(--border); }
+  .live-clock-card { padding:14px 16px; border-bottom:1px solid var(--border); background:linear-gradient(135deg,var(--surface) 0%,#1a1400 100%); flex-shrink:0; }
+  .live-search { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:13px; }
+  .live-search:focus { outline:none; border-color:var(--gold); }
+  .live-prospect-list { max-height:150px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; margin-top:6px; background:var(--surface); }
+  .live-prospect-option { padding:7px 12px; cursor:pointer; font-size:12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .live-prospect-option:last-child { border-bottom:none; }
+  .live-prospect-option:hover { background:var(--surface2); }
+  .live-prospect-option.lpo-selected { background:#1a1400; border-left:3px solid var(--gold); padding-left:9px; }
+  .reaction-btn { padding:4px 9px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:11px; font-weight:600; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+  .reaction-btn.rxn-active { background: color-mix(in srgb, currentColor 15%, transparent); }
+  .live-feed-item { padding:10px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+  .live-feed-item:hover { background:var(--surface); }
+  .live-feed-round-hdr { padding:6px 14px; background:var(--bg); font-family:'Bebas Neue',sans-serif; font-size:12px; letter-spacing:2px; color:var(--muted); border-bottom:1px solid var(--border); }
+  .live-avail-item { padding:8px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .live-needs-team { padding:8px 14px; border-bottom:1px solid var(--border); }
+  .live-panel-tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--surface); }
+  .live-panel-tab { flex:1; padding:10px; text-align:center; font-size:11px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; text-transform:uppercase; letter-spacing:0.5px; }
+  .live-panel-tab.active { color:var(--gold2); border-bottom-color:var(--gold2); }
+
   /* HEADER */
   header {
     background: linear-gradient(135deg, #0f1218 0%, #1a1020 100%);
@@ -315,6 +338,7 @@
   <div class="tab active" onclick="switchView('board',this)">📋 My Big Board</div>
   <div class="tab" onclick="switchView('compare',this)">⚖️ Compare</div>
   <div class="tab" onclick="switchView('mock',this)">🏟 Mock Draft</div>
+  <div class="tab" onclick="switchView('live',this)">📺 Draft Night</div>
 </div>
 
 <div class="main">
@@ -502,6 +526,43 @@
       <div id="imp-body"></div>
     </div>
     <div class="modal-footer" id="imp-footer"></div>
+  </div>
+</div>
+
+<!-- LIVE DRAFT VIEW -->
+<div id="live-draft-view" style="display:none;width:100%;">
+  <!-- top bar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--gold);">📺 DRAFT NIGHT</span>
+      <span id="live-progress-label" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline" style="font-size:12px;" onclick="undoLivePick()">↩ Undo</button>
+      <button class="btn btn-red" style="font-size:12px;" onclick="resetLiveDraft()">↺ Reset</button>
+    </div>
+  </div>
+  <div class="live-layout">
+    <!-- LEFT: Clock + Entry -->
+    <div class="live-col live-col-border" style="width:290px;flex-shrink:0;">
+      <div id="live-clock"></div>
+      <div id="live-entry-area" style="flex:1;overflow-y:auto;"></div>
+    </div>
+    <!-- MIDDLE: Feed -->
+    <div class="live-col live-col-border" style="flex:1;">
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;">
+        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Live Pick Feed</span>
+      </div>
+      <div style="flex:1;overflow-y:auto;" id="live-feed"></div>
+    </div>
+    <!-- RIGHT: Available + Needs -->
+    <div class="live-col" style="width:270px;flex-shrink:0;">
+      <div class="live-panel-tabs">
+        <div class="live-panel-tab active" id="ltab-available" onclick="setLiveTab('available')">Available</div>
+        <div class="live-panel-tab" id="ltab-needs" onclick="setLiveTab('needs')">Team Needs</div>
+      </div>
+      <div style="flex:1;overflow-y:auto;" id="live-right-panel"></div>
+    </div>
   </div>
 </div>
 
@@ -1295,6 +1356,7 @@ function switchView(view, btn) {
 
   board.style.display = 'none'; detail.style.display = 'none';
   compare.style.display = 'none'; mock.style.display = 'none';
+  document.getElementById('live-draft-view').style.display = 'none';
   main.style.display = 'none';
 
   if (view === 'board') {
@@ -1306,6 +1368,9 @@ function switchView(view, btn) {
   } else if (view === 'mock') {
     mock.style.display = 'block';
     renderMockDraft();
+  } else if (view === 'live') {
+    document.getElementById('live-draft-view').style.display = 'block';
+    renderLiveDraft();
   }
 }
 
@@ -3651,12 +3716,323 @@ function deleteSavedDraft(name) {
   renderLoadDraftList();
 }
 
+// ── LIVE DRAFT ────────────────────────────────────────────────────────
+const LIVE_REACTIONS = [
+  { key:'steal',     emoji:'🔥', label:'Steal',      color:'#27ae60' },
+  { key:'value',     emoji:'✅', label:'Great Value', color:'#2ecc71' },
+  { key:'solid',     emoji:'👍', label:'Solid',       color:'#7a8099' },
+  { key:'meh',       emoji:'😐', label:'Meh',         color:'#5a6070' },
+  { key:'reach',     emoji:'⚠️', label:'Reach',       color:'#e09030' },
+  { key:'bigreach',  emoji:'🚨', label:'Big Reach',   color:'#e03030' },
+  { key:'surprised', emoji:'😲', label:'Surprised',   color:'#3b82f6' },
+];
+
+let LIVE_DRAFT_PICKS = {}; // { pickNum: {playerName, playerId, reaction, team} }
+let liveCurrentPick = 1;
+let liveRightTab = 'available';
+let liveSelectedProspectId = null;
+let liveSelectedReaction = null;
+let livePosFilter = 'ALL';
+
+function saveLiveDraft() {
+  try { localStorage.setItem('nfl_live_draft', JSON.stringify({ picks: LIVE_DRAFT_PICKS, currentPick: liveCurrentPick })); } catch(e) {}
+}
+function loadLiveDraft() {
+  try {
+    const s = localStorage.getItem('nfl_live_draft');
+    if (!s) return;
+    const d = JSON.parse(s);
+    LIVE_DRAFT_PICKS = d.picks || {};
+    liveCurrentPick = d.currentPick || 1;
+  } catch(e) {}
+}
+
+function renderLiveDraft() {
+  renderLiveClock();
+  renderLiveEntryArea();
+  renderLiveFeed();
+  renderLiveRightPanel();
+  const made = Object.keys(LIVE_DRAFT_PICKS).length;
+  const el = document.getElementById('live-progress-label');
+  if (el) el.textContent = made ? `${made} picks recorded · Pick #${liveCurrentPick} next` : '';
+}
+
+function liveMockPick(num) { return MOCK_PICKS.find(p => p.pick === num); }
+
+function renderLiveClock() {
+  const el = document.getElementById('live-clock');
+  if (!el) return;
+  const pick = liveMockPick(liveCurrentPick);
+  if (!pick) {
+    el.innerHTML = `<div class="live-clock-card" style="text-align:center;"><div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:2px;color:var(--gold);">DRAFT COMPLETE</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">All ${Object.keys(LIVE_DRAFT_PICKS).length} picks recorded</div></div>`;
+    return;
+  }
+  const teamRaw = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+  const teamKey = TEAM_NAME_MAP[teamRaw] || teamRaw;
+  const needs = TEAM_NEEDS[teamKey] || [];
+  const needsBadges = needs.map(pos => `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:1px 5px;">${pos}</span>`).join(' ');
+  el.innerHTML = `<div class="live-clock-card">
+    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;">On the Clock · Rd ${pick.round} · Pick #${pick.pick}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--gold2);line-height:1.1;">${teamRaw}</div>
+    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:3px;">${needsBadges || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
+  </div>`;
+}
+
+function renderLiveEntryArea() {
+  const el = document.getElementById('live-entry-area');
+  if (!el) return;
+  const pick = liveMockPick(liveCurrentPick);
+  if (!pick) { el.innerHTML = ''; return; }
+
+  const draftedIds = new Set(Object.values(LIVE_DRAFT_PICKS).map(d => d.playerId).filter(Boolean));
+  const draftedNames = new Set(Object.values(LIVE_DRAFT_PICKS).map(d => d.playerName.toLowerCase()));
+  const input = document.getElementById('live-search-input');
+  const query = (input?.value || '').toLowerCase();
+  const selectedProspect = liveSelectedProspectId ? PROSPECTS.find(p => p.id === liveSelectedProspectId) : null;
+
+  const pool = PROSPECTS.filter(p =>
+    !draftedIds.has(p.id) &&
+    !draftedNames.has(p.name.toLowerCase()) &&
+    (!query || p.name.toLowerCase().includes(query) || p.pos.toLowerCase().includes(query))
+  );
+  const showList = query || !selectedProspect;
+
+  const prospectRows = (showList ? pool.slice(0, 12) : []).map(p => {
+    const rank = PROSPECTS.indexOf(p) + 1;
+    const sel = p.id === liveSelectedProspectId;
+    return `<div class="live-prospect-option${sel?' lpo-selected':''}" onclick="liveSelectProspect(${p.id})">
+      <span class="pos-badge pos-${p.pos}" style="font-size:9px;padding:1px 5px;">${p.pos}</span>
+      <span style="flex:1;font-size:12px;font-weight:${sel?'700':'400'};color:${sel?'var(--gold2)':'var(--text)'};">${p.name}</span>
+      <span style="font-size:10px;color:var(--muted);">#${rank}</span>
+    </div>`;
+  }).join('');
+
+  const reactionBtns = LIVE_REACTIONS.map(r => {
+    const on = r.key === liveSelectedReaction;
+    return `<button class="reaction-btn${on?' rxn-active':''}" style="${on?`color:${r.color};border-color:${r.color};`:''}" onclick="liveSetReaction('${r.key}')">${r.emoji} ${r.label}</button>`;
+  }).join('');
+
+  const canSubmit = selectedProspect || (input?.value||'').trim();
+
+  el.innerHTML = `<div style="padding:12px 14px;">
+    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Enter Pick #${pick.pick}</div>
+    ${selectedProspect ? `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--gold);border-radius:6px;margin-bottom:8px;">
+      <span class="pos-badge pos-${selectedProspect.pos}" style="font-size:9px;">${selectedProspect.pos}</span>
+      <span style="font-size:13px;font-weight:600;flex:1;">${selectedProspect.name}</span>
+      <button onclick="liveSelectProspect(null)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:2px;">✕</button>
+    </div>` : ''}
+    <input class="live-search" id="live-search-input" type="text"
+      placeholder="${selectedProspect?'Change player...':'Search by name or position...'}"
+      oninput="renderLiveEntryArea()"
+      value="${input?.value||''}">
+    ${showList && pool.length ? `<div class="live-prospect-list">${prospectRows}</div>` : ''}
+    ${showList && !pool.length && query ? `<div style="padding:8px 0;font-size:11px;color:var(--muted);">No matches — will save as free-form entry</div>` : ''}
+    <div style="margin-top:10px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Your Reaction</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">${reactionBtns}</div>
+    <button class="btn${canSubmit?' btn-gold':' btn-outline'}" style="width:100%;${canSubmit?'':'opacity:0.5;cursor:not-allowed;'}" onclick="submitLivePick()">✓ Record Pick #${pick.pick}</button>
+  </div>`;
+}
+
+function liveSelectProspect(id) {
+  liveSelectedProspectId = id;
+  const input = document.getElementById('live-search-input');
+  if (input && id === null) input.value = '';
+  else if (input && id !== null) input.value = '';
+  renderLiveEntryArea();
+}
+
+function liveSetReaction(key) {
+  liveSelectedReaction = liveSelectedReaction === key ? null : key;
+  // re-render only entry area for speed
+  renderLiveEntryArea();
+}
+
+function submitLivePick() {
+  const pick = liveMockPick(liveCurrentPick);
+  if (!pick) return;
+  const input = document.getElementById('live-search-input');
+  const freeform = (input?.value||'').trim();
+  const prospect = liveSelectedProspectId ? PROSPECTS.find(p => p.id === liveSelectedProspectId) : null;
+  const playerName = prospect ? prospect.name : freeform;
+  if (!playerName) { showToast('Enter a player name'); return; }
+
+  LIVE_DRAFT_PICKS[liveCurrentPick] = {
+    playerName,
+    playerId: prospect ? prospect.id : null,
+    reaction: liveSelectedReaction,
+    team: pick.team,
+  };
+
+  liveCurrentPick++;
+  while (liveCurrentPick <= MOCK_PICKS.length && LIVE_DRAFT_PICKS[liveCurrentPick]) liveCurrentPick++;
+
+  liveSelectedProspectId = null;
+  liveSelectedReaction = null;
+
+  saveLiveDraft();
+  renderLiveDraft();
+
+  setTimeout(() => {
+    const feed = document.getElementById('live-feed');
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, 50);
+}
+
+function undoLivePick() {
+  const made = Object.keys(LIVE_DRAFT_PICKS).map(Number).sort((a,b) => b-a);
+  if (!made.length) { showToast('No picks to undo'); return; }
+  const last = made[0];
+  delete LIVE_DRAFT_PICKS[last];
+  liveCurrentPick = last;
+  liveSelectedProspectId = null;
+  liveSelectedReaction = null;
+  saveLiveDraft();
+  renderLiveDraft();
+}
+
+function resetLiveDraft() {
+  if (!confirm('Clear all recorded live draft picks?')) return;
+  LIVE_DRAFT_PICKS = {};
+  liveCurrentPick = 1;
+  liveSelectedProspectId = null;
+  liveSelectedReaction = null;
+  saveLiveDraft();
+  renderLiveDraft();
+}
+
+function renderLiveFeed() {
+  const el = document.getElementById('live-feed');
+  if (!el) return;
+  const made = Object.keys(LIVE_DRAFT_PICKS).map(Number).sort((a,b) => a-b);
+  if (!made.length) {
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;flex-direction:column;gap:10px;"><div style="font-size:36px;">📺</div><div>Picks will appear here as you record them</div></div>`;
+    return;
+  }
+  let lastRound = 0;
+  el.innerHTML = made.map(pickNum => {
+    const d = LIVE_DRAFT_PICKS[pickNum];
+    const pick = liveMockPick(pickNum);
+    if (!pick) return '';
+    const reaction = LIVE_REACTIONS.find(r => r.key === d.reaction);
+    const prospect = d.playerId ? PROSPECTS.find(p => p.id === d.playerId) : null;
+    const boardRank = prospect ? PROSPECTS.indexOf(prospect) + 1 : null;
+    const diff = boardRank ? pickNum - boardRank : null; // positive = reach, negative = value
+
+    const teamRaw = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+    let roundHdr = '';
+    if (pick.round !== lastRound) {
+      lastRound = pick.round;
+      roundHdr = `<div class="live-feed-round-hdr">ROUND ${pick.round}</div>`;
+    }
+    const valueStr = diff !== null
+      ? diff < -5  ? `<span style="color:var(--green);font-size:10px;font-weight:700;">▲${Math.abs(diff)} value</span>`
+      : diff > 10 ? `<span style="color:var(--red);font-size:10px;font-weight:700;">▼${diff} reach</span>`
+      : diff > 3  ? `<span style="color:var(--accent);font-size:10px;">▼${diff} slight reach</span>`
+      : `<span style="color:var(--muted);font-size:10px;">≈ fair value</span>`
+      : '';
+    const posBadge = prospect ? `<span class="pos-badge pos-${prospect.pos}" style="font-size:9px;padding:1px 5px;">${prospect.pos}</span>` : '';
+
+    return `${roundHdr}<div class="live-feed-item">
+      <div style="min-width:38px;">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--text);">#${pickNum}</div>
+        <div style="font-size:9px;color:var(--muted);">Rd ${pick.round}</div>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${teamRaw}</div>
+        <div style="display:flex;align-items:center;gap:5px;">${posBadge}<span style="font-size:13px;font-weight:600;">${d.playerName}</span></div>
+        <div style="margin-top:2px;">${boardRank?`<span style="font-size:10px;color:var(--muted);">Board #${boardRank} · </span>`:''} ${valueStr}</div>
+      </div>
+      ${reaction ? `<div style="font-size:11px;font-weight:700;color:${reaction.color};white-space:nowrap;text-align:right;">${reaction.emoji}<div style="font-size:9px;margin-top:1px;">${reaction.label}</div></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function setLiveTab(tab) {
+  liveRightTab = tab;
+  document.getElementById('ltab-available').classList.toggle('active', tab === 'available');
+  document.getElementById('ltab-needs').classList.toggle('active', tab === 'needs');
+  renderLiveRightPanel();
+}
+
+function renderLiveRightPanel() {
+  if (liveRightTab === 'available') renderLiveAvailable();
+  else renderLiveNeeds();
+}
+
+function renderLiveAvailable() {
+  const el = document.getElementById('live-right-panel');
+  if (!el) return;
+  const draftedIds = new Set(Object.values(LIVE_DRAFT_PICKS).map(d => d.playerId).filter(Boolean));
+  const draftedNames = new Set(Object.values(LIVE_DRAFT_PICKS).map(d => d.playerName.toLowerCase()));
+  const positions = ['QB','RB','WR','TE','OT','IOL','C','EDGE','DT','LB','CB','S'];
+  const filterBtns = ['ALL',...positions].map(pos =>
+    `<button class="filter-btn${livePosFilter===pos?' active':''}" style="font-size:10px;padding:3px 9px;" onclick="setLivePosFilter('${pos}')">${pos}</button>`
+  ).join('');
+  const allAvail = PROSPECTS.filter(p => !draftedIds.has(p.id) && !draftedNames.has(p.name.toLowerCase()));
+  const filtered = allAvail.filter(p => livePosFilter === 'ALL' || p.pos === livePosFilter);
+  el.innerHTML = `
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:2;">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${allAvail.length} prospects available</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">${filterBtns}</div>
+    </div>
+    ${filtered.length ? filtered.slice(0,150).map(p => {
+      const rank = PROSPECTS.indexOf(p) + 1;
+      const grade = computeGrade(p);
+      return `<div class="live-avail-item">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:26px;">#${rank}</span>
+        <span class="pos-badge pos-${p.pos}" style="font-size:9px;padding:1px 5px;">${p.pos}</span>
+        <span style="flex:1;font-size:12px;font-weight:500;">${p.name}</span>
+        <span style="font-size:11px;font-weight:700;color:${getGradeColor(grade)}">${grade}</span>
+      </div>`;
+    }).join('') : `<div style="padding:24px;text-align:center;font-size:12px;color:var(--muted);">${livePosFilter==='ALL'?'All prospects drafted':'No '+livePosFilter+' prospects available'}</div>`}`;
+}
+
+function setLivePosFilter(pos) {
+  livePosFilter = pos;
+  renderLiveAvailable();
+}
+
+function renderLiveNeeds() {
+  const el = document.getElementById('live-right-panel');
+  if (!el) return;
+  // Track which positions have been filled per team via live picks
+  const filledNeeds = {};
+  Object.entries(LIVE_DRAFT_PICKS).forEach(([num, d]) => {
+    if (!d.playerId) return;
+    const pick = liveMockPick(+num);
+    if (!pick) return;
+    const prospect = PROSPECTS.find(p => p.id === d.playerId);
+    if (!prospect) return;
+    const raw = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+    const team = TEAM_NAME_MAP[raw] || raw;
+    if (!filledNeeds[team]) filledNeeds[team] = new Set();
+    filledNeeds[team].add(prospect.pos);
+  });
+  const teams = Object.entries(TEAM_NEEDS).filter(([,n]) => n.length).sort((a,b) => a[0].localeCompare(b[0]));
+  el.innerHTML = teams.map(([team, needs]) => {
+    const filled = filledNeeds[team] || new Set();
+    const remaining = needs.filter(p => !filled.has(p)).length;
+    const badges = needs.map(pos => {
+      const done = filled.has(pos);
+      return `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:1px 5px;${done?'opacity:0.3;text-decoration:line-through;':''}">${pos}</span>`;
+    }).join(' ');
+    return `<div class="live-needs-team">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:12px;font-weight:600;">${team}</span>
+        <span style="font-size:10px;color:${remaining===0?'var(--green)':'var(--muted)'};">${remaining===0?'✓ Done':`${remaining} left`}</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;">${badges}</div>
+    </div>`;
+  }).join('');
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────
 loadProspects();
 loadMockDraft();
 loadTiers();
 initFuturePicks();
 loadFuturePicks();
+loadLiveDraft();
 renderBoard();
 </script>
 </body>
