@@ -521,7 +521,7 @@ function renderBoard() {
       <div class="rank-badge ${getRankBadgeClass(displayRank)}">${displayRank}</div>
       <span class="pos-badge pos-${p.pos}">${p.pos}</span>
       <div class="prospect-info">
-        <div class="prospect-name">${p.name} ${diffStr}</div>
+        <div class="prospect-name">${p.name} ${diffStr} ${p.ras > 0 ? `<span style="font-size:9px;font-weight:700;background:${p.ras>=9?'var(--gold)':p.ras>=7?'var(--green)':p.ras>=5?'var(--blue)':'#555'};color:${p.ras>=9?'#000':'#fff'};border-radius:4px;padding:1px 5px;vertical-align:middle;letter-spacing:0.3px;">RAS ${p.ras.toFixed(1)}</span>` : ''}</div>
         <div class="prospect-school">${p.school} · ${p.height} · ${p.weight > 0 ? p.weight + ' lbs' : '—'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
