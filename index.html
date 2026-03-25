@@ -965,6 +965,7 @@ function resetRankings() {
 
 // ── DETAIL ───────────────────────────────────────────────────────────
 function selectProspect(id) {
+  if (id !== selectedId) aiHistory = [];
   selectedId = id;
   renderBoard();
   renderDetail();
@@ -1161,17 +1162,32 @@ function populateCompareSelects() {
       const idx = PROSPECTS.indexOf(p);
       return `<option value="${idx}" ${String(idx) === currentVal ? 'selected' : ''}>${p.name} (${p.pos}, ${p.school})</option>`;
     }).join('');
-    // Default: pick different prospects for A and B
     if (!currentVal && i === 1 && filtered.length > 1) sel.value = PROSPECTS.indexOf(filtered[1]);
   });
+
+  // Guard: if both sides ended up on the same prospect, bump B to the next available
+  const selA = document.getElementById('compare-a');
+  const selB = document.getElementById('compare-b');
+  if (selA.value === selB.value && selB.options.length > 1) {
+    const other = Array.from(selB.options).find(o => o.value !== selA.value);
+    if (other) selB.value = other.value;
+  }
+
   renderCompare();
 }
 
 function addToCompare(id) {
   const idx = PROSPECTS.findIndex(p => p.id === id);
-  document.getElementById('compare-a').value = idx;
-  renderCompare();
   switchView('compare', document.querySelectorAll('.tab')[1]);
+  // switchView populates the selects — now we can safely set the value
+  document.getElementById('compare-a').value = idx;
+  // Make sure B isn't the same player
+  const selB = document.getElementById('compare-b');
+  if (String(selB.value) === String(idx)) {
+    const other = Array.from(selB.options).find(o => o.value !== String(idx));
+    if (other) selB.value = other.value;
+  }
+  renderCompare();
   showToast(`${PROSPECTS[idx].name} added to comparison`);
 }
 
