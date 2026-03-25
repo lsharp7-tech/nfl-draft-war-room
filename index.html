@@ -882,15 +882,16 @@ function renderCompare() {
   if (!a || !b) return;
 
   const stats = [
-    { label:'Weight',         keyA:a.weight+' lbs',  keyB:b.weight+' lbs',  numA:a.weight,           numB:b.weight,           higher:true  },
-    { label:'40-Yard Dash',   keyA:a.forty+'s',       keyB:b.forty+'s',       numA:parseFloat(a.forty),numB:parseFloat(b.forty),higher:false },
     { label:'Grade',          keyA:computeGrade(a),    keyB:computeGrade(b),    numA:computeGrade(a),    numB:computeGrade(b),    higher:true  },
+    { label:'My Board Rank',  keyA:'#'+(PROSPECTS.indexOf(a)+1), keyB:'#'+(PROSPECTS.indexOf(b)+1), numA:PROSPECTS.indexOf(a)+1, numB:PROSPECTS.indexOf(b)+1, higher:false },
     { label:'B/R Rank',       keyA:'#'+a.espn,         keyB:'#'+b.espn,         numA:a.espn,             numB:b.espn,             higher:false },
     { label:'PFF Rank',       keyA:'#'+a.pff,          keyB:'#'+b.pff,          numA:a.pff,              numB:b.pff,              higher:false },
     { label:'PFSN Rank',      keyA:'#'+a.pfsn,         keyB:'#'+b.pfsn,         numA:a.pfsn,             numB:b.pfsn,             higher:false },
     { label:'CBS Rank',       keyA:'#'+a.cbs,          keyB:'#'+b.cbs,          numA:a.cbs,              numB:b.cbs,              higher:false },
-    { label:'My Board Rank',  keyA:'#'+(PROSPECTS.indexOf(a)+1), keyB:'#'+(PROSPECTS.indexOf(b)+1), numA:PROSPECTS.indexOf(a)+1, numB:PROSPECTS.indexOf(b)+1, higher:false },
+    { label:'Height',         keyA:a.height!=='—'?a.height:'—',  keyB:b.height!=='—'?b.height:'—',  numA:0, numB:0, higher:true },
+    { label:'Weight',         keyA:a.weight+' lbs',  keyB:b.weight+' lbs',  numA:a.weight,           numB:b.weight,           higher:true  },
     { label:'RAS Score',      keyA:a.ras>0?a.ras.toFixed(2):'—', keyB:b.ras>0?b.ras.toFixed(2):'—', numA:a.ras||0, numB:b.ras||0, higher:true },
+    { label:'40-Yard Dash',   keyA:a.forty!=='—'?a.forty+'s':'—', keyB:b.forty!=='—'?b.forty+'s':'—', numA:parseFloat(a.forty)||0, numB:parseFloat(b.forty)||0, higher:false },
     { label:'Arm Length',     keyA:a.arm!=='—'?a.arm+'"':'—',    keyB:b.arm!=='—'?b.arm+'"':'—',    numA:parseFloat(a.arm)||0,   numB:parseFloat(b.arm)||0,   higher:true },
   ];
 
