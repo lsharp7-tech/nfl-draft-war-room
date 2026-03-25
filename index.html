@@ -376,6 +376,7 @@
     <div style="display:flex;align-items:center;gap:8px;">
       <span id="mock-progress-counter" style="font-size:11px;color:var(--muted);white-space:nowrap;"></span>
       <button class="btn btn-outline" style="font-size:12px;" onclick="simAllRemaining()">⚡ Sim All</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="undoLastPick()">↩ Undo</button>
       <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
     </div>
@@ -463,6 +464,17 @@
       <div class="detail-tab" id="mock-ptab-otis" onclick="switchMockProfileTab('otis')" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;">🤖 Otis</div>
     </div>
     <div id="mock-profile-content" style="max-height:65vh;overflow-y:auto;padding:16px;"></div>
+  </div>
+</div>
+
+<!-- DRAFT SUMMARY MODAL -->
+<div id="summary-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeDraftSummary()">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="modal-header">
+      <h2>🏆 Your Draft Class</h2>
+      <button class="modal-close" onclick="closeDraftSummary()">✕ Close</button>
+    </div>
+    <div class="modal-body" id="summary-body" style="padding:16px;"></div>
   </div>
 </div>
 
@@ -2192,11 +2204,19 @@ function isMyPick(pick) {
 
 function simulateSinglePick(pick) {
   const draftedIds = new Set(MOCK_PICKS.filter(p => p.playerId).map(p => p.playerId));
-  const available = [...PROSPECTS].filter(p => !draftedIds.has(p.id))
+  const teamNeeds = TEAM_NEEDS[pickOwner(pick)] || [];
+  let available = [...PROSPECTS].filter(p => !draftedIds.has(p.id))
     .sort((a, b) => computeGrade(b) - computeGrade(a));
   if (!available.length) return;
+  // 60% chance team picks for need if a need player is available in the pool
   const poolSize = Math.min(available.length, pick.round * 3);
-  pick.playerId = available[Math.floor(Math.random() * poolSize)].id;
+  const pool = available.slice(0, poolSize);
+  const needPool = pool.filter(p => teamNeeds.includes(p.pos));
+  if (needPool.length && Math.random() < 0.6) {
+    pick.playerId = needPool[Math.floor(Math.random() * needPool.length)].id;
+  } else {
+    pick.playerId = pool[Math.floor(Math.random() * pool.length)].id;
+  }
   pick.simulated = true;
 }
 
@@ -2222,6 +2242,7 @@ function simulateToMyPick() {
     showToast(`Your turn: Pick #${nextMine.pick} · ${nextMine.team}`);
   } else {
     showToast('All your picks have been made!');
+    setTimeout(openDraftSummary, 600);
   }
 }
 
@@ -2233,6 +2254,21 @@ function simAllRemaining() {
   renderMockDraft();
   renderBoard();
   showToast(`Simulated ${remaining.length} remaining picks`);
+}
+
+function undoLastPick() {
+  // Find the last filled pick (highest pick number with a player)
+  const filled = MOCK_PICKS.filter(p => p.playerId);
+  if (!filled.length) { showToast('No picks to undo'); return; }
+  const last = filled[filled.length - 1];
+  const p = PROSPECTS.find(x => x.id === last.playerId);
+  last.playerId = null;
+  last.simulated = false;
+  selectedMockPick = last.pick;
+  saveMockDraft();
+  renderMockDraft();
+  renderBoard();
+  showToast(`↩ Undid ${p ? p.name : 'pick'} — Pick #${last.pick}`);
 }
 
 // ── MOCK PLAYER PROFILE ───────────────────────────────────────────────
@@ -2456,25 +2492,35 @@ const TEAM_NEEDS = {
   "Washington Commanders": ["OT","EDGE","CB","IOL","WR"],
 };
 
+// Round weight: early rounds matter more (R1=3x, R2=2x, R3=1.5x, R4-7=1x)
+function roundWeight(round) {
+  if (round === 1) return 3;
+  if (round === 2) return 2;
+  if (round === 3) return 1.5;
+  return 1;
+}
+
 function valueScore(pick) {
   if (!pick.playerId) return null;
   const p = PROSPECTS.find(x => x.id === pick.playerId);
   if (!p) return null;
   const boardRank = PROSPECTS.indexOf(p) + 1;
-  return pick.pick - boardRank; // positive = value, negative = reach
+  const raw = pick.pick - boardRank; // positive = value, negative = reach
+  return Math.round(raw * roundWeight(pick.round));
 }
 
+// Thresholds account for round weighting (R1 picks worth 3x)
 function gradeFromValue(avg) {
-  if (avg >= 20)  return { letter: 'A+', color: '#f0c040' };
-  if (avg >= 12)  return { letter: 'A',  color: '#f0c040' };
-  if (avg >= 6)   return { letter: 'A-', color: '#d4a017' };
-  if (avg >= 2)   return { letter: 'B+', color: '#27ae60' };
-  if (avg >= -2)  return { letter: 'B',  color: '#27ae60' };
-  if (avg >= -6)  return { letter: 'B-', color: '#3b82f6' };
-  if (avg >= -12) return { letter: 'C+', color: '#3b82f6' };
-  if (avg >= -18) return { letter: 'C',  color: '#7a8099' };
-  if (avg >= -25) return { letter: 'C-', color: '#7a8099' };
-  if (avg >= -35) return { letter: 'D',  color: '#e03030' };
+  if (avg >= 40)  return { letter: 'A+', color: '#f0c040' };
+  if (avg >= 25)  return { letter: 'A',  color: '#f0c040' };
+  if (avg >= 12)  return { letter: 'A-', color: '#d4a017' };
+  if (avg >= 4)   return { letter: 'B+', color: '#27ae60' };
+  if (avg >= -4)  return { letter: 'B',  color: '#27ae60' };
+  if (avg >= -12) return { letter: 'B-', color: '#3b82f6' };
+  if (avg >= -25) return { letter: 'C+', color: '#3b82f6' };
+  if (avg >= -40) return { letter: 'C',  color: '#7a8099' };
+  if (avg >= -55) return { letter: 'C-', color: '#7a8099' };
+  if (avg >= -75) return { letter: 'D',  color: '#e03030' };
   return           { letter: 'F',  color: '#e03030' };
 }
 
@@ -2506,6 +2552,97 @@ function openReportCard() {
 
 function closeReportCard() {
   document.getElementById('report-modal').style.display = 'none';
+}
+
+// ── DRAFT SUMMARY ─────────────────────────────────────────────────────
+function closeDraftSummary() {
+  document.getElementById('summary-modal').style.display = 'none';
+}
+
+function openDraftSummary() {
+  if (!myMockTeam) return;
+  const myPicks = MOCK_PICKS.filter(p => isMyPick(p) && p.playerId && !p.simulated);
+  if (!myPicks.length) return;
+  document.getElementById('summary-modal').style.display = 'flex';
+  renderDraftSummary(myPicks);
+}
+
+function renderDraftSummary(myPicks) {
+  const body = document.getElementById('summary-body');
+  const needs = TEAM_NEEDS[myMockTeam] || [];
+  const scores = myPicks.map(valueScore).filter(v => v !== null);
+  const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+  const grade = scores.length ? gradeFromValue(avg) : null;
+
+  const pickRows = myPicks.map(pick => {
+    const p = PROSPECTS.find(x => x.id === pick.playerId);
+    if (!p) return '';
+    const boardRank = PROSPECTS.indexOf(p) + 1;
+    const score = valueScore(pick);
+    const fillsNeed = needs.includes(p.pos);
+    const scoreStr = score > 0
+      ? `<span class="rc-value-pos">+${score}</span>`
+      : score < 0 ? `<span class="rc-value-neg">${score}</span>`
+      : `<span style="color:var(--muted)">±0</span>`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap;min-width:60px;">Rd ${pick.round}, #${pick.pick}</span>
+      <span class="pos-badge pos-${p.pos}" style="font-size:10px;padding:2px 6px;">${p.pos}</span>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${p.name}${fillsNeed ? ' <span style="color:var(--green);font-size:11px;">✓ Need</span>' : ''}</div>
+        <div style="font-size:11px;color:var(--muted);">${p.school} · Board #${boardRank}</div>
+      </div>
+      <div>${scoreStr}</div>
+    </div>`;
+  }).join('');
+
+  const needsAddressed = myPicks.filter(pick => {
+    const p = PROSPECTS.find(x => x.id === pick.playerId);
+    return p && needs.includes(p.pos);
+  }).length;
+
+  body.innerHTML = `
+    <div style="text-align:center;padding:16px 0 20px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:4px;">${myMockTeam} Draft Class</div>
+      ${grade ? `<div style="font-size:52px;font-family:'Bebas Neue',sans-serif;color:${grade.color};line-height:1;">${grade.letter}</div>` : ''}
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">${myPicks.length} picks · ${needsAddressed} needs addressed · Avg value ${avg > 0 ? '+' : ''}${avg.toFixed(1)}</div>
+    </div>
+    <div style="margin-bottom:16px;">${pickRows}</div>
+    <div style="text-align:center;">
+      <button class="btn btn-gold" onclick="summaryAskOtis()">🤖 Get Otis's Full Analysis</button>
+      <div id="summary-otis-result" style="margin-top:12px;font-size:13px;color:var(--muted);text-align:left;line-height:1.6;"></div>
+    </div>`;
+}
+
+async function summaryAskOtis() {
+  if (!myMockTeam) return;
+  const myPicks = MOCK_PICKS.filter(p => isMyPick(p) && p.playerId && !p.simulated);
+  const needs = TEAM_NEEDS[myMockTeam] || [];
+  const el = document.getElementById('summary-otis-result');
+  if (el) el.textContent = 'Analyzing your draft class...';
+  if (!getApiKey()) { if (el) el.textContent = '⚠️ No API key set.'; return; }
+
+  const picksText = myPicks.map(pick => {
+    const p = PROSPECTS.find(x => x.id === pick.playerId);
+    if (!p) return '';
+    const boardRank = PROSPECTS.indexOf(p) + 1;
+    const score = valueScore(pick);
+    return `Round ${pick.round}, Pick #${pick.pick}: ${p.name} (${p.pos}, ${p.school}) — Board rank #${boardRank}, Value score: ${score > 0 ? '+' : ''}${score}`;
+  }).join('\n');
+
+  const prompt = `You are grading the ${myMockTeam}'s 2026 NFL Draft class. Their top needs were: ${needs.join(', ')}.\n\nTheir picks:\n${picksText}\n\nGive an overall grade, highlight the best pick, worst pick, and whether they addressed their needs. Be direct and specific. 4-6 sentences.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 400, messages: [{ role: 'user', content: prompt }] }),
+    });
+    const data = await res.json();
+    const answer = data.error ? `⚠️ ${data.error.message}` : (data.content?.[0]?.text || 'No response.');
+    if (el) el.textContent = answer;
+  } catch(err) {
+    if (el) el.textContent = `⚠️ ${err.message}`;
+  }
 }
 
 function renderReportCard() {
@@ -2572,7 +2709,7 @@ function renderReportCard() {
       </table>
     </div>
     <div style="padding:12px 16px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);">
-      Avg Value = pick position minus board rank per selection. Positive = value, negative = reach.
+      Avg Value = (pick position − board rank) × round weight. Round 1 picks count 3×, Round 2 count 2×, Round 3 count 1.5×. Positive = value, negative = reach.
     </div>`;
 }
 
