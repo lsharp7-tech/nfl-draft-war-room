@@ -592,7 +592,9 @@ function heightToInches(h) {
 
 function computeGrade(p) {
   const expertRanks = [p.espn, p.pff, p.pfsn, p.cbs].filter(r => r > 0 && r < 999);
-  const myRankVal = (p.myRank && p.myRank > 0) ? p.myRank : null;
+  // Use live board position, not static myRank field
+  const liveRank = PROSPECTS.indexOf(p) + 1;
+  const myRankVal = liveRank > 0 ? liveRank : (p.myRank && p.myRank > 0 ? p.myRank : null);
 
   if (expertRanks.length === 0 && !myRankVal) return p.grade || 60;
 
