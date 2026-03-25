@@ -235,6 +235,19 @@
   .mock-avail-row:hover { background:var(--surface2); }
   .mock-avail-row.drafted-out { opacity:0.3; pointer-events:none; }
   .mock-hint { font-size:12px; color:var(--muted); padding:12px 16px; font-style:italic; }
+
+  /* REPORT CARD */
+  .rc-table { width:100%; border-collapse:collapse; }
+  .rc-table th { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; background:var(--bg); position:sticky; top:0; }
+  .rc-table td { padding:10px 14px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle; }
+  .rc-table tr:hover td { background:var(--surface2); }
+  .rc-grade { font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:1px; }
+  .rc-picks-list { font-size:11px; color:var(--muted); line-height:1.7; }
+  .rc-value-pos { color:var(--green); font-weight:700; }
+  .rc-value-neg { color:var(--red); font-weight:700; }
+  .rc-otis-output { padding:16px; background:var(--bg); border-top:1px solid var(--border); font-size:13px; line-height:1.7; color:var(--text); }
+  .rc-otis-output .otis-label { font-size:11px; color:var(--gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+  .rc-no-picks { font-size:12px; color:var(--border); font-style:italic; }
 </style>
 </head>
 <body>
@@ -344,6 +357,7 @@
     </div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
+      <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
     </div>
   </div>
   <div class="mock-layout">
@@ -408,6 +422,17 @@
       <div id="imp-body"></div>
     </div>
     <div class="modal-footer" id="imp-footer"></div>
+  </div>
+</div>
+
+<!-- REPORT CARD MODAL -->
+<div id="report-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeReportCard()">
+  <div class="modal-box" style="max-width:860px;">
+    <div class="modal-header">
+      <h2>📊 Draft Report Card</h2>
+      <button class="modal-close" onclick="closeReportCard()">✕ Close</button>
+    </div>
+    <div class="modal-body" id="report-body" style="padding:0;"></div>
   </div>
 </div>
 
@@ -1994,6 +2019,152 @@ function removeMockPick(pickNum) {
   saveMockDraft();
   renderMockDraft();
   renderBoard();
+}
+
+// ── REPORT CARD ──────────────────────────────────────────────────────
+
+function pickOwner(pick) {
+  return pick.team.replace(/\s*\(via[^)]*\)/i, '').trim();
+}
+
+function valueScore(pick) {
+  if (!pick.playerId) return null;
+  const p = PROSPECTS.find(x => x.id === pick.playerId);
+  if (!p) return null;
+  const boardRank = PROSPECTS.indexOf(p) + 1;
+  return pick.pick - boardRank; // positive = value, negative = reach
+}
+
+function gradeFromValue(avg) {
+  if (avg >= 20)  return { letter: 'A+', color: '#f0c040' };
+  if (avg >= 12)  return { letter: 'A',  color: '#f0c040' };
+  if (avg >= 6)   return { letter: 'A-', color: '#d4a017' };
+  if (avg >= 2)   return { letter: 'B+', color: '#27ae60' };
+  if (avg >= -2)  return { letter: 'B',  color: '#27ae60' };
+  if (avg >= -6)  return { letter: 'B-', color: '#3b82f6' };
+  if (avg >= -12) return { letter: 'C+', color: '#3b82f6' };
+  if (avg >= -18) return { letter: 'C',  color: '#7a8099' };
+  if (avg >= -25) return { letter: 'C-', color: '#7a8099' };
+  if (avg >= -35) return { letter: 'D',  color: '#e03030' };
+  return           { letter: 'F',  color: '#e03030' };
+}
+
+function buildTeamReport() {
+  const teams = {};
+  MOCK_PICKS.forEach(pick => {
+    const owner = pickOwner(pick);
+    if (!teams[owner]) teams[owner] = [];
+    teams[owner].push(pick);
+  });
+
+  return Object.entries(teams).map(([team, picks]) => {
+    const filled = picks.filter(p => p.playerId);
+    const scores = filled.map(valueScore).filter(v => v !== null);
+    const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    return { team, picks, filled, avg, grade: avg !== null ? gradeFromValue(avg) : null };
+  }).sort((a, b) => (b.avg ?? -999) - (a.avg ?? -999));
+}
+
+function openReportCard() {
+  const filledCount = MOCK_PICKS.filter(p => p.playerId).length;
+  if (filledCount === 0) { showToast('Make some picks first'); return; }
+  document.getElementById('report-modal').style.display = 'flex';
+  renderReportCard();
+}
+
+function closeReportCard() {
+  document.getElementById('report-modal').style.display = 'none';
+}
+
+function renderReportCard() {
+  const report = buildTeamReport();
+  const body = document.getElementById('report-body');
+
+  const rows = report.map(({ team, picks, filled, avg, grade }) => {
+    if (filled.length === 0) return '';
+    const picksList = filled.map(pick => {
+      const p = PROSPECTS.find(x => x.id === pick.playerId);
+      const score = valueScore(pick);
+      const boardRank = PROSPECTS.indexOf(p) + 1;
+      const scoreStr = score > 0
+        ? `<span class="rc-value-pos">+${score}</span>`
+        : score < 0 ? `<span class="rc-value-neg">${score}</span>`
+        : `<span style="color:var(--muted)">=</span>`;
+      return `#${pick.pick} ${p.name} (${p.pos}) — board: #${boardRank} ${scoreStr}`;
+    }).join('<br>');
+
+    const avgStr = avg > 0
+      ? `<span class="rc-value-pos">+${avg.toFixed(1)}</span>`
+      : `<span class="rc-value-neg">${avg.toFixed(1)}</span>`;
+
+    return `
+      <tr id="rc-row-${team.replace(/\s/g,'-')}">
+        <td style="font-weight:700;white-space:nowrap;">${team}</td>
+        <td><span class="rc-grade" style="color:${grade.color}">${grade.letter}</span></td>
+        <td>${avgStr}</td>
+        <td><div class="rc-picks-list">${picksList}</div></td>
+        <td>
+          <button class="btn btn-gold" style="font-size:11px;padding:6px 10px;white-space:nowrap;"
+            onclick="gradeTeamWithOtis('${team.replace(/'/g,"\\'")}')">🤖 Ask Otis</button>
+          <div id="rc-otis-${team.replace(/[^a-zA-Z]/g,'')}" style="margin-top:6px;font-size:12px;color:var(--muted);"></div>
+        </td>
+      </tr>`;
+  }).filter(Boolean).join('');
+
+  body.innerHTML = `
+    <div style="overflow-y:auto;max-height:70vh;">
+      <table class="rc-table">
+        <thead><tr>
+          <th>Team</th><th>Grade</th><th>Avg Value</th><th>Picks</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="padding:12px 16px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);">
+      Avg Value = pick position minus board rank per selection. Positive = value, negative = reach.
+    </div>`;
+}
+
+async function gradeTeamWithOtis(team) {
+  const elId = 'rc-otis-' + team.replace(/[^a-zA-Z]/g, '');
+  const el = document.getElementById(elId);
+  if (!el) return;
+
+  if (!getApiKey()) {
+    el.innerHTML = `<span style="color:var(--gold);">⚠️ No API key set.</span>`;
+    return;
+  }
+
+  const teamPicks = MOCK_PICKS.filter(p => p.playerId && pickOwner(p) === team);
+  if (teamPicks.length === 0) { el.textContent = 'No picks to grade.'; return; }
+
+  const pickSummary = teamPicks.map(pick => {
+    const p = PROSPECTS.find(x => x.id === pick.playerId);
+    const boardRank = PROSPECTS.indexOf(p) + 1;
+    return `Pick #${pick.pick} (R${pick.round}): ${p.name}, ${p.pos}, ${p.school} — board rank #${boardRank}`;
+  }).join('\n');
+
+  el.innerHTML = `<span style="color:var(--muted);font-style:italic;">Otis is grading...</span>`;
+
+  const question = `Grade the ${team}'s 2026 NFL Draft class. Here are their picks:\n\n${pickSummary}\n\nGive an overall letter grade (A through F), identify the best value pick, the biggest reach, and summarize the class in 4-6 sentences.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        system: 'You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements. Keep responses to 3-5 sentences unless more detail is needed.',
+        messages: [{ role: 'user', content: question }],
+      }),
+    });
+    const data = await res.json();
+    const answer = data.error ? `⚠️ ${data.error.message}` : (data.content?.[0]?.text || 'No response.');
+    el.innerHTML = `<div style="background:var(--surface2);border:1px solid var(--gold);border-radius:6px;padding:10px;margin-top:6px;color:var(--text);line-height:1.6;">${answer}</div>`;
+  } catch (err) {
+    el.innerHTML = `<span style="color:var(--red);">⚠️ ${err.message}</span>`;
+  }
 }
 
 // ── PERSISTENCE ──────────────────────────────────────────────────────
