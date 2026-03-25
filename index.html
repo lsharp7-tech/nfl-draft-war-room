@@ -524,10 +524,12 @@
     <div class="trade-layout" id="trade-body" style="max-height:55vh;overflow-y:auto;"></div>
     <div class="trade-footer">
       <div class="trade-summary" id="trade-summary">Select picks on both sides to preview the trade.</div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:10px;">
+        <button class="btn btn-outline" onclick="tradeAskOtis()">🐶 Ask Otis</button>
         <button class="btn btn-outline" onclick="closeTradeModal()">Cancel</button>
         <button class="btn btn-gold" onclick="executeTrade()">🔄 Execute Trade</button>
       </div>
+      <div id="trade-otis-result" style="display:none;padding:12px;background:var(--surface);border-radius:8px;border:1px solid var(--border);font-size:13px;color:var(--text);line-height:1.6;"></div>
     </div>
   </div>
 </div>
@@ -2991,6 +2993,8 @@ function setTradeTeam(side, team) {
 function toggleTradePick(pickNum, side) {
   const set = side === 'A' ? tradePicksA : tradePicksB;
   if (set.has(pickNum)) set.delete(pickNum); else set.add(pickNum);
+  const otisEl = document.getElementById('trade-otis-result');
+  if (otisEl) otisEl.style.display = 'none';
   renderTradeModal();
 }
 
@@ -3053,6 +3057,54 @@ function executeTrade() {
   closeTradeModal();
   renderMockDraft();
   showToast(`🔄 Trade complete: ${tradeTeamA} ↔ ${tradeTeamB}`);
+}
+
+async function tradeAskOtis() {
+  if (!tradeTeamA || !tradeTeamB) { showToast('Select two teams first'); return; }
+  if (!tradePicksA.size && !tradePicksB.size) { showToast('Select picks to analyze'); return; }
+
+  const el = document.getElementById('trade-otis-result');
+  el.style.display = '';
+  el.innerHTML = '<span style="color:var(--muted);font-style:italic;">Analyzing trade...</span>';
+
+  if (!getApiKey()) { el.textContent = '⚠️ No API key set.'; return; }
+
+  const needsA = TEAM_NEEDS[tradeTeamA] || [];
+  const needsB = TEAM_NEEDS[tradeTeamB] || [];
+  const valA = totalTradeValue(tradePicksA);
+  const valB = totalTradeValue(tradePicksB);
+
+  const formatPickDetails = (set, receivingTeam) => [...set].sort((a,b)=>a-b).map(n => {
+    const pick = MOCK_PICKS.find(p => p.pick === n);
+    const player = pick?.playerId ? PROSPECTS.find(x => x.id === pick.playerId) : null;
+    return `Pick #${n} (Round ${pick?.round}, ${pickTradeValue(n)} pts)${player ? ` — currently holds ${player.name} (${player.pos})` : ''}`;
+  }).join('\n');
+
+  const prompt = `Analyze this 2026 NFL mock draft trade:
+
+${tradeTeamA} receives (${valB} trade value pts):
+${formatPickDetails(tradePicksB, tradeTeamA)}
+
+${tradeTeamB} receives (${valA} trade value pts):
+${formatPickDetails(tradePicksA, tradeTeamB)}
+
+${tradeTeamA} top needs: ${needsA.join(', ')}
+${tradeTeamB} top needs: ${needsB.join(', ')}
+
+Who wins this trade and why? Does it make strategic sense for both teams given their needs? Be direct and specific. 4-5 sentences.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 400, messages: [{ role: 'user', content: prompt }] }),
+    });
+    const data = await res.json();
+    const answer = data.error ? `⚠️ ${data.error.message}` : (data.content?.[0]?.text || 'No response.');
+    el.innerHTML = `<div style="font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🐶 Otis's Take</div>${answer}`;
+  } catch(err) {
+    el.textContent = `⚠️ ${err.message}`;
+  }
 }
 
 // ── TIERS ─────────────────────────────────────────────────────────────
