@@ -1903,6 +1903,7 @@ const MOCK_PICKS = [
 
 let selectedMockPick = null;
 let mockBoardSort = 'my';
+let mockBoardFilter = 'ALL';
 
 function saveMockDraft() {
   try { localStorage.setItem('nfl_mock_draft', JSON.stringify(MOCK_PICKS.map(p => p.playerId))); } catch(e) {}
@@ -1972,6 +1973,11 @@ function setMockBoardSort(s) {
   renderMockBoard();
 }
 
+function setMockBoardFilter(f) {
+  mockBoardFilter = f;
+  renderMockBoard();
+}
+
 function sortedMockProspects() {
   const arr = [...PROSPECTS];
   if (mockBoardSort === 'my')   return arr; // already in board order
@@ -2023,8 +2029,19 @@ function renderMockBoard() {
       ${sortBtns}
     </div>`;
 
+  // Filter bar
+  const positions = ['ALL','QB','RB','WR','TE','OT','IOL','C','EDGE','DT','LB','CB','S'];
+  const filterBtns = positions.map(pos =>
+    `<button class="filter-btn ${mockBoardFilter===pos?'active':''}" onclick="setMockBoardFilter('${pos}')" style="font-size:11px;padding:4px 10px;">${pos}</button>`
+  ).join('');
+  const filterBar = `
+    <div style="padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--surface);">
+      <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Filter:</span>
+      ${filterBtns}
+    </div>`;
+
   // Player rows
-  const rows = sortedMockProspects().map(p => {
+  const rows = sortedMockProspects().filter(p => mockBoardFilter === 'ALL' || p.pos === mockBoardFilter).map(p => {
     const drafted = draftedIds.has(p.id);
     const fillsNeed = needs.includes(p.pos);
     const needDot = fillsNeed && !drafted
@@ -2040,7 +2057,7 @@ function renderMockBoard() {
     </div>`;
   }).join('');
 
-  panel.innerHTML = hint + needsCard + sortBar + rows;
+  panel.innerHTML = hint + needsCard + sortBar + filterBar + rows;
 }
 
 function selectMockPick(pickNum) {
