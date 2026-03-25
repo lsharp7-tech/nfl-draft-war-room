@@ -708,8 +708,9 @@ function renderProspectProfile(p) {
     ` : ''}
 
     <div style="display:flex;gap:8px;margin-top:4px;">
-      <button class="btn btn-outline" style="flex:1;" onclick="openEditModal(${selectedId})">✏️ Edit Prospect</button>
-      <button class="btn btn-gold" style="flex:2;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🤖 Get AI Scouting Report</button>
+      <button class="btn btn-outline" style="flex:1;" onclick="openEditModal(${selectedId})">✏️ Edit</button>
+      <button class="btn btn-red" style="flex:1;" onclick="deleteProspect(${selectedId})">🗑 Delete</button>
+      <button class="btn btn-gold" style="flex:2;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🤖 AI Report</button>
     </div>
   `;
 }
@@ -1166,6 +1167,17 @@ function rowsToProspects(rows, mapping, skipPosFilter) {
       notes: get(row, 'notes') || '',
     };
   }).filter(Boolean);
+}
+
+function deleteProspect(id) {
+  const p = PROSPECTS.find(x => x.id === id);
+  if (!p || !confirm(`Remove ${p.name} from your board?`)) return;
+  PROSPECTS.splice(PROSPECTS.indexOf(p), 1);
+  selectedId = null;
+  saveProspects();
+  renderBoard();
+  document.getElementById('detail-content').innerHTML = '';
+  showToast(`✓ ${p.name} removed`);
 }
 
 function openEditModal(id) {
