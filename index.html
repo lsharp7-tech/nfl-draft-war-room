@@ -334,6 +334,21 @@
   </div>
 </div>
 
+<!-- EDIT PROSPECT MODAL -->
+<div id="edit-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Edit Prospect</div>
+      <button class="modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div id="edit-body" style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px;"></div>
+    <div style="padding:0 20px 20px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="saveProspectEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- IMPORT MODAL -->
 <div id="import-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeImportModal()">
   <div class="modal-box">
@@ -692,7 +707,10 @@ function renderProspectProfile(p) {
     <div style="font-size:13px;color:var(--muted);line-height:1.65;background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border);margin-bottom:16px;">${p.notes}</div>
     ` : ''}
 
-    <button class="btn btn-gold" style="width:100%;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🤖 Get AI Scouting Report</button>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="btn btn-outline" style="flex:1;" onclick="openEditModal(${selectedId})">✏️ Edit Prospect</button>
+      <button class="btn btn-gold" style="flex:2;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🤖 Get AI Scouting Report</button>
+    </div>
   `;
 }
 
@@ -1148,6 +1166,48 @@ function rowsToProspects(rows, mapping, skipPosFilter) {
       notes: get(row, 'notes') || '',
     };
   }).filter(Boolean);
+}
+
+function openEditModal(id) {
+  const p = PROSPECTS.find(x => x.id === id);
+  if (!p) return;
+  const field = (label, key, val, full) => `
+    <div style="${full ? 'grid-column:1/-1;' : ''}">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">${label}</div>
+      <input data-key="${key}" value="${val !== '—' && val !== 0 ? val : ''}" placeholder="—"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;">
+    </div>`;
+  document.getElementById('edit-body').innerHTML =
+    field('Name', 'name', p.name, true) +
+    field('Position', 'pos', p.pos) +
+    field('School', 'school', p.school) +
+    field('Height', 'height', p.height) +
+    field('Weight (lbs)', 'weight', p.weight || '') +
+    field('40-Yard Dash', 'forty', p.forty) +
+    field('Arm Length', 'arm', p.arm) +
+    field('RAS Score', 'ras', p.ras || '');
+  document.getElementById('edit-modal').dataset.editId = id;
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+function closeEditModal() {
+  document.getElementById('edit-modal').style.display = 'none';
+}
+function saveProspectEdit() {
+  const id = parseInt(document.getElementById('edit-modal').dataset.editId);
+  const p = PROSPECTS.find(x => x.id === id);
+  if (!p) return;
+  document.querySelectorAll('#edit-body [data-key]').forEach(input => {
+    const key = input.dataset.key;
+    const val = input.value.trim();
+    if (key === 'weight') p.weight = parseInt(val) || 0;
+    else if (key === 'ras') p.ras = parseFloat(val) || 0;
+    else p[key] = val || '—';
+  });
+  saveProspects();
+  closeEditModal();
+  renderBoard();
+  renderDetail();
+  showToast('✓ Prospect updated');
 }
 
 function openImportModal() {
