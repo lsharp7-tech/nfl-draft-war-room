@@ -1276,39 +1276,66 @@ function renderImportStep() {
   }
 
   else if (IMP.step === 4) {
-    const incoming = rowsToProspects(IMP.rows, IMP.mapping, IMP.rankTarget === 'combine');
+    const isCombinePreview = IMP.rankTarget === 'combine';
+    const incoming = rowsToProspects(IMP.rows, IMP.mapping, isCombinePreview);
+    const existingMap = new Map(PROSPECTS.map(p => [p.name.toLowerCase(), p]));
     const existing = new Set(PROSPECTS.map(p=>p.name.toLowerCase()));
+    const matches = incoming.filter(p => existing.has(p.name.toLowerCase()));
     const newOnes = incoming.filter(p=>!existing.has(p.name.toLowerCase()));
     const dupes = incoming.length - newOnes.length;
-    body.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
-        <div class="import-stat"><div class="big">${incoming.length}</div><div class="sub">In paste</div></div>
-        <div class="import-stat"><div class="big" style="color:var(--gold)">${newOnes.length}</div><div class="sub">New to board</div></div>
-        <div class="import-stat"><div class="big" style="color:var(--muted);font-size:32px;">${dupes}</div><div class="sub">Duplicates skipped</div></div>
-      </div>
-      <div style="margin-bottom:16px;">
-        <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Import Mode</div>
-        <div style="display:flex;gap:8px;">
-          <button class="mode-btn ${IMP.importMode==='merge'?'active':''}" onclick="IMP.importMode='merge';renderImportStep()">Merge (add new, keep existing)</button>
-          <button class="mode-btn ${IMP.importMode==='replace'?'active':''}" onclick="IMP.importMode='replace';renderImportStep()">Replace All</button>
+
+    if (isCombinePreview) {
+      body.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+          <div class="import-stat"><div class="big">${incoming.length}</div><div class="sub">In paste</div></div>
+          <div class="import-stat"><div class="big" style="color:var(--green)">${matches.length}</div><div class="sub">Will update</div></div>
+          <div class="import-stat"><div class="big" style="color:var(--muted);font-size:32px;">${newOnes.length}</div><div class="sub">Not on board (skipped)</div></div>
         </div>
-        <div style="font-size:12px;color:var(--muted);margin-top:8px;">
-          ${IMP.importMode==='merge'
-            ? `Adds <strong style="color:var(--green)">${newOnes.length}</strong> new prospects to your existing <strong>${PROSPECTS.length}</strong>.`
-            : `<strong style="color:var(--red)">Removes all ${PROSPECTS.length}</strong> current prospects and loads ${incoming.length} from this import.`}
+        <div style="background:#0d1625;border:1px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:#93c5fd;margin-bottom:16px;">
+          Updates RAS / combine data for <strong>${matches.length}</strong> existing prospects. Players not on your board are skipped.
         </div>
-      </div>
-      ${newOnes.length ? `
-        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">First 5 new prospects</div>
-        <table class="preview-table">
-          <tr><th>#</th><th>Name</th><th>Pos</th><th>School</th><th>Grade</th></tr>
-          ${newOnes.slice(0,5).map(p=>`<tr><td>${p.myRank}</td><td>${p.name}</td><td>${p.pos}</td><td>${p.school}</td><td>${p.grade}</td></tr>`).join('')}
-        </table>` : `<div class="empty-state" style="padding:20px;"><p>All prospects already exist on your board.</p></div>`}
-    `;
-    footer.innerHTML = `
-      <button class="btn btn-outline" onclick="setImportStep(3)">← Back</button>
-      <button class="btn btn-red" onclick="confirmImport()">✓ Import ${IMP.importMode==='replace'?incoming.length:newOnes.length} Prospects</button>
-    `;
+        ${matches.length ? `
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">First 5 players to update</div>
+          <table class="preview-table">
+            <tr><th>Name</th><th>Pos</th><th>RAS</th></tr>
+            ${matches.slice(0,5).map(p=>`<tr><td>${p.name}</td><td>${p.pos}</td><td>${p.ras||'—'}</td></tr>`).join('')}
+          </table>` : `<div class="empty-state" style="padding:20px;"><p>No name matches found. Check your column mapping.</p></div>`}
+      `;
+      footer.innerHTML = `
+        <button class="btn btn-outline" onclick="setImportStep(3)">← Back</button>
+        <button class="btn btn-gold" onclick="confirmImport()">✓ Update ${matches.length} Prospects</button>
+      `;
+    } else {
+      body.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+          <div class="import-stat"><div class="big">${incoming.length}</div><div class="sub">In paste</div></div>
+          <div class="import-stat"><div class="big" style="color:var(--gold)">${newOnes.length}</div><div class="sub">New to board</div></div>
+          <div class="import-stat"><div class="big" style="color:var(--muted);font-size:32px;">${dupes}</div><div class="sub">Duplicates skipped</div></div>
+        </div>
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Import Mode</div>
+          <div style="display:flex;gap:8px;">
+            <button class="mode-btn ${IMP.importMode==='merge'?'active':''}" onclick="IMP.importMode='merge';renderImportStep()">Merge (add new, keep existing)</button>
+            <button class="mode-btn ${IMP.importMode==='replace'?'active':''}" onclick="IMP.importMode='replace';renderImportStep()">Replace All</button>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px;">
+            ${IMP.importMode==='merge'
+              ? `Adds <strong style="color:var(--green)">${newOnes.length}</strong> new prospects to your existing <strong>${PROSPECTS.length}</strong>.`
+              : `<strong style="color:var(--red)">Removes all ${PROSPECTS.length}</strong> current prospects and loads ${incoming.length} from this import.`}
+          </div>
+        </div>
+        ${newOnes.length ? `
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">First 5 new prospects</div>
+          <table class="preview-table">
+            <tr><th>#</th><th>Name</th><th>Pos</th><th>School</th><th>Grade</th></tr>
+            ${newOnes.slice(0,5).map(p=>`<tr><td>${p.myRank}</td><td>${p.name}</td><td>${p.pos}</td><td>${p.school}</td><td>${p.grade}</td></tr>`).join('')}
+          </table>` : `<div class="empty-state" style="padding:20px;"><p>All prospects already exist on your board.</p></div>`}
+      `;
+      footer.innerHTML = `
+        <button class="btn btn-outline" onclick="setImportStep(3)">← Back</button>
+        <button class="btn btn-red" onclick="confirmImport()">✓ Import ${IMP.importMode==='replace'?incoming.length:newOnes.length} Prospects</button>
+      `;
+    }
   }
 }
 
