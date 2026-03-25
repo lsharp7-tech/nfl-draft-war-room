@@ -317,6 +317,8 @@
         <button class="filter-btn" id="sort-ras" onclick="sortBoard('ras',this)">RAS</button>
         <button class="filter-btn" id="combine-toggle-btn" onclick="toggleCombineFilters()" style="margin-left:8px;">📐 Combine</button>
         <button class="filter-btn" id="tiers-toggle-btn" onclick="toggleTierZones()">🏷 Tiers</button>
+        <button class="filter-btn" onclick="autoTier()">⚡ Auto-Tier</button>
+        <button class="filter-btn" onclick="clearAllTiers()">✕ Clear Tiers</button>
       </div>
     </div>
     <input class="search-bar" id="search-input" type="text" placeholder="Search by name or school..." oninput="renderBoard()">
@@ -2901,6 +2903,44 @@ function renameTier(startIdx) {
   tier.name = name;
   saveTiers();
   renderBoard();
+}
+
+function clearAllTiers() {
+  if (!TIERS.length) { showToast('No tiers to clear'); return; }
+  if (!confirm('Clear all tier breaks?')) return;
+  TIERS = [];
+  saveTiers();
+  renderBoard();
+}
+
+function autoTier() {
+  if (!confirm('This will replace any existing tiers with auto-detected ones. Continue?')) return;
+
+  // Default tier names by slot (first tier has no break — it's the top of the board)
+  const tierNames = ['Round 1', 'Early Day 2', 'Late Day 2', 'Day 3 Starters', 'Deep Sleepers'];
+
+  // Compute grade for every prospect in current board order
+  const grades = PROSPECTS.map((p, i) => ({ i, g: computeGrade(p) }));
+
+  // Find the 4 biggest grade drops between consecutive players
+  const drops = [];
+  for (let i = 1; i < grades.length; i++) {
+    drops.push({ startIdx: i, drop: grades[i - 1].g - grades[i].g });
+  }
+  drops.sort((a, b) => b.drop - a.drop);
+  const breakPoints = drops.slice(0, 4).map(d => d.startIdx).sort((a, b) => a - b);
+
+  TIERS = breakPoints.map((startIdx, slot) => ({
+    name: tierNames[slot + 1] || `Tier ${slot + 2}`,
+    startIdx,
+  }));
+  TIERS.sort((a, b) => a.startIdx - b.startIdx);
+  saveTiers();
+  showTierZones = false;
+  const btn = document.getElementById('tiers-toggle-btn');
+  if (btn) btn.classList.remove('active');
+  renderBoard();
+  showToast(`Auto-tiered into ${TIERS.length + 1} tiers based on grade drop-offs`);
 }
 
 // ── COMBINE FILTERS ────────────────────────────────────────────────────
