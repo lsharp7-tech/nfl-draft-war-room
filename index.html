@@ -2023,9 +2023,49 @@ function removeMockPick(pickNum) {
 
 // ── REPORT CARD ──────────────────────────────────────────────────────
 
+const TEAM_NAME_MAP = {
+  'L.A. Rams':      'Los Angeles Rams',
+  'L.A. Chargers':  'Los Angeles Chargers',
+};
 function pickOwner(pick) {
-  return pick.team.replace(/\s*\(via[^)]*\)/i, '').trim();
+  const t = pick.team.replace(/\s*\(via[^)]*\)/i, '').trim();
+  return TEAM_NAME_MAP[t] || t;
 }
+
+const TEAM_NEEDS = {
+  "Arizona Cardinals":     ["QB","OT","EDGE","CB","WR"],
+  "Atlanta Falcons":       ["EDGE","OT","CB","S","IOL"],
+  "Baltimore Ravens":      ["WR","CB","EDGE","IOL","S"],
+  "Buffalo Bills":         ["EDGE","IOL","CB","S","WR"],
+  "Carolina Panthers":     ["OT","EDGE","CB","IOL","S"],
+  "Chicago Bears":         ["OT","EDGE","CB","IOL","WR"],
+  "Cincinnati Bengals":    ["OT","EDGE","CB","S","WR"],
+  "Cleveland Browns":      ["QB","WR","EDGE","CB","IOL"],
+  "Dallas Cowboys":        ["EDGE","CB","OT","WR","S"],
+  "Denver Broncos":        ["OT","EDGE","CB","WR","IOL"],
+  "Detroit Lions":         ["CB","S","EDGE","OT","WR"],
+  "Green Bay Packers":     ["CB","EDGE","OT","S","WR"],
+  "Houston Texans":        ["CB","OT","EDGE","IOL","S"],
+  "Indianapolis Colts":    ["QB","WR","EDGE","CB","OT"],
+  "Jacksonville Jaguars":  ["QB","WR","OT","EDGE","CB"],
+  "Kansas City Chiefs":    ["WR","CB","EDGE","OT","IOL"],
+  "Las Vegas Raiders":     ["QB","WR","OT","EDGE","CB"],
+  "Los Angeles Chargers":  ["OT","EDGE","CB","IOL","WR"],
+  "Los Angeles Rams":      ["CB","EDGE","OT","IOL","WR"],
+  "Miami Dolphins":        ["OT","EDGE","CB","IOL","S"],
+  "Minnesota Vikings":     ["EDGE","OT","CB","IOL","S"],
+  "New England Patriots":  ["QB","WR","OT","EDGE","CB"],
+  "New Orleans Saints":    ["QB","WR","OT","EDGE","CB"],
+  "New York Giants":       ["QB","OT","WR","EDGE","CB"],
+  "New York Jets":         ["WR","OT","EDGE","CB","IOL"],
+  "Philadelphia Eagles":   ["CB","OT","EDGE","WR","IOL"],
+  "Pittsburgh Steelers":   ["QB","WR","OT","CB","EDGE"],
+  "San Francisco 49ers":   ["CB","EDGE","OT","WR","IOL"],
+  "Seattle Seahawks":      ["QB","WR","EDGE","OT","CB"],
+  "Tampa Bay Buccaneers":  ["EDGE","OT","CB","IOL","WR"],
+  "Tennessee Titans":      ["QB","WR","OT","EDGE","CB"],
+  "Washington Commanders": ["OT","EDGE","CB","IOL","WR"],
+};
 
 function valueScore(pick) {
   if (!pick.playerId) return null;
@@ -2082,28 +2122,46 @@ function renderReportCard() {
 
   const rows = report.map(({ team, picks, filled, avg, grade }) => {
     if (filled.length === 0) return '';
+    const needs = TEAM_NEEDS[team] || [];
+    const needsBadges = needs.map(pos =>
+      `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:1px 5px;">${pos}</span>`
+    ).join(' ');
+
     const picksList = filled.map(pick => {
       const p = PROSPECTS.find(x => x.id === pick.playerId);
       const score = valueScore(pick);
       const boardRank = PROSPECTS.indexOf(p) + 1;
+      const fillsNeed = needs.includes(p.pos);
       const scoreStr = score > 0
         ? `<span class="rc-value-pos">+${score}</span>`
         : score < 0 ? `<span class="rc-value-neg">${score}</span>`
         : `<span style="color:var(--muted)">=</span>`;
-      return `#${pick.pick} ${p.name} (${p.pos}) — board: #${boardRank} ${scoreStr}`;
+      const needIcon = fillsNeed ? `<span style="color:var(--green);font-size:10px;" title="Fills a team need">✓</span>` : '';
+      return `<span style="color:${fillsNeed ? 'var(--text)' : 'var(--muted)'}">#${pick.pick} ${p.name} (${p.pos}) — board: #${boardRank} ${scoreStr} ${needIcon}</span>`;
     }).join('<br>');
 
     const avgStr = avg > 0
       ? `<span class="rc-value-pos">+${avg.toFixed(1)}</span>`
       : `<span class="rc-value-neg">${avg.toFixed(1)}</span>`;
 
+    const needsAddressed = filled.filter(pick => {
+      const p = PROSPECTS.find(x => x.id === pick.playerId);
+      return p && needs.includes(p.pos);
+    }).length;
+
     return `
       <tr id="rc-row-${team.replace(/\s/g,'-')}">
-        <td style="font-weight:700;white-space:nowrap;">${team}</td>
+        <td style="font-weight:700;white-space:nowrap;min-width:160px;">
+          ${team}
+          <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px;">${needsBadges}</div>
+        </td>
         <td><span class="rc-grade" style="color:${grade.color}">${grade.letter}</span></td>
-        <td>${avgStr}</td>
-        <td><div class="rc-picks-list">${picksList}</div></td>
         <td>
+          ${avgStr}
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">${needsAddressed}/${filled.length} needs</div>
+        </td>
+        <td><div class="rc-picks-list">${picksList}</div></td>
+        <td style="min-width:120px;">
           <button class="btn btn-gold" style="font-size:11px;padding:6px 10px;white-space:nowrap;"
             onclick="gradeTeamWithOtis('${team.replace(/'/g,"\\'")}')">🤖 Ask Otis</button>
           <div id="rc-otis-${team.replace(/[^a-zA-Z]/g,'')}" style="margin-top:6px;font-size:12px;color:var(--muted);"></div>
@@ -2138,15 +2196,18 @@ async function gradeTeamWithOtis(team) {
   const teamPicks = MOCK_PICKS.filter(p => p.playerId && pickOwner(p) === team);
   if (teamPicks.length === 0) { el.textContent = 'No picks to grade.'; return; }
 
+  const needs = TEAM_NEEDS[team] || [];
   const pickSummary = teamPicks.map(pick => {
     const p = PROSPECTS.find(x => x.id === pick.playerId);
     const boardRank = PROSPECTS.indexOf(p) + 1;
-    return `Pick #${pick.pick} (R${pick.round}): ${p.name}, ${p.pos}, ${p.school} — board rank #${boardRank}`;
+    const fillsNeed = needs.includes(p.pos) ? ' ✓ NEED' : '';
+    return `Pick #${pick.pick} (R${pick.round}): ${p.name}, ${p.pos}, ${p.school} — board rank #${boardRank}${fillsNeed}`;
   }).join('\n');
 
   el.innerHTML = `<span style="color:var(--muted);font-style:italic;">Otis is grading...</span>`;
 
-  const question = `Grade the ${team}'s 2026 NFL Draft class. Here are their picks:\n\n${pickSummary}\n\nGive an overall letter grade (A through F), identify the best value pick, the biggest reach, and summarize the class in 4-6 sentences.`;
+  const needsStr = needs.length ? `Team needs heading into the draft: ${needs.join(', ')}.` : '';
+  const question = `Grade the ${team}'s 2026 NFL Draft class. ${needsStr}\n\nHere are their picks (picks marked ✓ NEED address a team need):\n\n${pickSummary}\n\nGive an overall letter grade (A through F), comment on how well they addressed their needs, identify the best value pick and biggest reach, and summarize the class in 4-6 sentences.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
