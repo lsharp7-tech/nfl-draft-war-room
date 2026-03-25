@@ -301,6 +301,7 @@
   </div>
   <div class="header-actions">
     <span id="prospect-count" style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
+    <button class="btn btn-outline" onclick="openAddProspectModal()">➕ Add Prospect</button>
     <button class="btn btn-outline" onclick="openImportModal()">⬆ Import Players</button>
     <button class="btn btn-outline" onclick="exportCSV()">⬇ Export CSV</button>
     <button class="btn btn-outline" onclick="openKeyModal()" id="key-btn">🔑 API Key</button>
@@ -388,11 +389,21 @@
   </div>
   <div style="display:flex;gap:16px;margin-bottom:20px;">
     <div style="flex:1;">
-      <div class="ai-label">Prospect A</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <div class="ai-label" style="margin:0;">Prospect A</div>
+        <select id="compare-pos-a" onchange="populateCompareSelects()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+          <option value="">All Positions</option>
+        </select>
+      </div>
       <select class="compare-select" id="compare-a" style="font-size:14px;padding:10px;" onchange="renderCompare()"></select>
     </div>
     <div style="flex:1;">
-      <div class="ai-label">Prospect B</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <div class="ai-label" style="margin:0;">Prospect B</div>
+        <select id="compare-pos-b" onchange="populateCompareSelects()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+          <option value="">All Positions</option>
+        </select>
+      </div>
       <select class="compare-select" id="compare-b" style="font-size:14px;padding:10px;" onchange="renderCompare()"></select>
     </div>
     <div style="display:flex;align-items:flex-end;">
@@ -425,6 +436,7 @@
       <button class="btn btn-outline" style="font-size:12px;" onclick="saveDraftAs()">💾 Save</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openLoadDraftModal()">📂 Load</button>
       <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
+      <button class="btn btn-outline" onclick="exportMockDraft()">⬇ Export Draft</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
     </div>
   </div>
@@ -511,6 +523,77 @@
       <div class="detail-tab" id="mock-ptab-otis" onclick="switchMockProfileTab('otis')" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;">🐶 Otis</div>
     </div>
     <div id="mock-profile-content" style="max-height:65vh;overflow-y:auto;padding:16px;"></div>
+  </div>
+</div>
+
+<!-- ADD PROSPECT MODAL -->
+<div id="add-prospect-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeAddProspectModal()">
+  <div class="modal-box" style="max-width:500px;">
+    <div class="modal-header">
+      <h2>➕ Add Prospect</h2>
+      <button class="modal-close" onclick="closeAddProspectModal()">✕ Close</button>
+    </div>
+    <div class="modal-body" style="padding:16px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="grid-column:1/-1;">
+          <div class="ai-label">Name *</div>
+          <input id="ap-name" type="text" placeholder="First Last" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
+        </div>
+        <div>
+          <div class="ai-label">Position *</div>
+          <select id="ap-pos" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+            <option value="">Select...</option>
+            <option>QB</option><option>RB</option><option>WR</option><option>TE</option>
+            <option>OT</option><option>IOL</option><option>C</option><option>EDGE</option>
+            <option>DT</option><option>LB</option><option>CB</option><option>S</option>
+          </select>
+        </div>
+        <div>
+          <div class="ai-label">School</div>
+          <input id="ap-school" type="text" placeholder="University" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
+        </div>
+        <div>
+          <div class="ai-label">Height (e.g. 6-3)</div>
+          <input id="ap-height" type="text" placeholder="6-3" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div>
+          <div class="ai-label">Weight (lbs)</div>
+          <input id="ap-weight" type="number" placeholder="215" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div>
+          <div class="ai-label">40-Yard Dash</div>
+          <input id="ap-forty" type="text" placeholder="4.45" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div>
+          <div class="ai-label">RAS Score</div>
+          <input id="ap-ras" type="number" step="0.01" placeholder="0–10" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div>
+          <div class="ai-label">B/R Rank</div>
+          <input id="ap-espn" type="number" placeholder="999 = unranked" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div>
+          <div class="ai-label">PFF Rank</div>
+          <input id="ap-pff" type="number" placeholder="999 = unranked" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div>
+          <div class="ai-label">PFSN Rank</div>
+          <input id="ap-pfsn" type="number" placeholder="999 = unranked" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div>
+          <div class="ai-label">CBS Rank</div>
+          <input id="ap-cbs" type="number" placeholder="999 = unranked" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div style="grid-column:1/-1;">
+          <div class="ai-label">Scouting Notes</div>
+          <textarea id="ap-notes" rows="3" placeholder="Brief scouting summary..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn btn-outline" onclick="closeAddProspectModal()">Cancel</button>
+        <button class="btn btn-gold" onclick="submitAddProspect()">Add to Board</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -660,7 +743,7 @@ let selectedId = null;
 let activeDetailTab = 'detail';
 let dragSrcIdx = null;
 let aiHistory = [];
-let TIERS = []; // [{name, startIdx}] — tier header shown before PROSPECTS[startIdx]
+let TIERS = []; // [{name, afterId}] — tier header shown after prospect with this id
 let showTierZones = false;
 
 // ── HELPERS ──────────────────────────────────────────────────────────
@@ -736,19 +819,22 @@ function renderBoard() {
 
   const list = document.getElementById('prospect-list');
   list.innerHTML = '';
+  let prevProspect = null;
   filtered.forEach(p => {
     const origIdx = PROSPECTS.indexOf(p);
     const displayRank = origIdx + 1;
 
-    // Tier header before this prospect?
-    const tier = TIERS.find(t => t.startIdx === origIdx);
-    if (tier) {
-      const tierEl = document.createElement('div');
-      tierEl.className = 'tier-header';
-      tierEl.innerHTML = `<span class="tier-label">${tier.name}</span>
-        <button class="tier-action-btn" onclick="renameTier(${origIdx})" title="Rename">✎</button>
-        <button class="tier-action-btn" onclick="deleteTier(${origIdx})" title="Delete">✕</button>`;
-      list.appendChild(tierEl);
+    // Tier header after the previous prospect?
+    if (prevProspect) {
+      const tier = TIERS.find(t => t.afterId === prevProspect.id);
+      if (tier) {
+        const tierEl = document.createElement('div');
+        tierEl.className = 'tier-header';
+        tierEl.innerHTML = `<span class="tier-label">${tier.name}</span>
+          <button class="tier-action-btn" onclick="renameTier('${tier.afterId}')" title="Rename">✎</button>
+          <button class="tier-action-btn" onclick="deleteTier('${tier.afterId}')" title="Delete">✕</button>`;
+        list.appendChild(tierEl);
+      }
     }
 
     const row = document.createElement('div');
@@ -802,9 +888,11 @@ function renderBoard() {
     if (showTierZones) {
       const addZone = document.createElement('div');
       addZone.className = 'tier-add-zone';
-      addZone.innerHTML = `<button onclick="addTierAfter(${origIdx})">⊕ add tier break here</button>`;
+      addZone.innerHTML = `<button onclick="addTierAfter('${p.id}')">⊕ add tier break here</button>`;
       list.appendChild(addZone);
     }
+
+    prevProspect = p;
   });
 }
 
@@ -1058,9 +1146,23 @@ function quickAI(id) {
 
 // ── COMPARE ──────────────────────────────────────────────────────────
 function populateCompareSelects() {
-  ['compare-a', 'compare-b'].forEach((selId, i) => {
-    const sel = document.getElementById(selId);
-    sel.innerHTML = PROSPECTS.map((p, idx) => `<option value="${idx}" ${idx === i ? 'selected' : ''}>${p.name} (${p.pos}, ${p.school})</option>`).join('');
+  const positions = ['QB','RB','WR','TE','OT','IOL','C','EDGE','DT','LB','CB','S'];
+  ['a','b'].forEach((side, i) => {
+    const posEl = document.getElementById(`compare-pos-${side}`);
+    const currentPos = posEl.value;
+    posEl.innerHTML = '<option value="">All Positions</option>' +
+      positions.map(pos => `<option value="${pos}" ${currentPos === pos ? 'selected' : ''}>${pos}</option>`).join('');
+    const posFilter = posEl.value;
+
+    const sel = document.getElementById(`compare-${side}`);
+    const currentVal = sel.value;
+    const filtered = PROSPECTS.filter(p => !posFilter || p.pos === posFilter);
+    sel.innerHTML = filtered.map(p => {
+      const idx = PROSPECTS.indexOf(p);
+      return `<option value="${idx}" ${String(idx) === currentVal ? 'selected' : ''}>${p.name} (${p.pos}, ${p.school})</option>`;
+    }).join('');
+    // Default: pick different prospects for A and B
+    if (!currentVal && i === 1 && filtered.length > 1) sel.value = PROSPECTS.indexOf(filtered[1]);
   });
   renderCompare();
 }
@@ -1797,6 +1899,30 @@ function exportCSV() {
   a.download = 'nfl-draft-2026-bigboard.csv';
   a.click();
   showToast('✓ Board exported to CSV');
+}
+
+function exportMockDraft() {
+  const drafted = MOCK_PICKS.filter(p => p.playerId);
+  if (!drafted.length) { showToast('No picks made yet'); return; }
+  const headers = ['Pick','Round','Team','Player','Pos','School','Board Rank','Value Score','Simulated'];
+  const rows = drafted.map(pick => {
+    const p = PROSPECTS.find(x => x.id === pick.playerId);
+    if (!p) return null;
+    const boardRank = PROSPECTS.indexOf(p) + 1;
+    const score = valueScore(pick);
+    return [
+      pick.pick, pick.round, pickOwner(pick),
+      p.name, p.pos, p.school,
+      boardRank, score !== null ? score : '',
+      pick.simulated ? 'Yes' : 'No'
+    ];
+  }).filter(Boolean);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'nfl-mock-draft-2026.csv';
+  a.click();
+  showToast('✓ Mock draft exported to CSV');
 }
 
 // ── MOCK DRAFT ────────────────────────────────────────────────────────
@@ -3213,9 +3339,61 @@ Who wins this trade and why? Does it make strategic sense for both teams given t
   }
 }
 
+// ── ADD PROSPECT ───────────────────────────────────────────────────────
+function openAddProspectModal() {
+  // Clear all fields
+  ['ap-name','ap-school','ap-height','ap-forty','ap-notes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['ap-weight','ap-ras','ap-espn','ap-pff','ap-pfsn','ap-cbs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('ap-pos').value = '';
+  document.getElementById('add-prospect-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('ap-name').focus(), 50);
+}
+
+function closeAddProspectModal() {
+  document.getElementById('add-prospect-modal').style.display = 'none';
+}
+
+function submitAddProspect() {
+  const name = document.getElementById('ap-name').value.trim();
+  const pos = document.getElementById('ap-pos').value;
+  if (!name) { showToast('Name is required'); return; }
+  if (!pos) { showToast('Position is required'); return; }
+
+  const newId = Math.max(0, ...PROSPECTS.map(p => p.id)) + 1;
+  const height = document.getElementById('ap-height').value.trim() || '—';
+  const weight = parseFloat(document.getElementById('ap-weight').value) || 0;
+  const forty = document.getElementById('ap-forty').value.trim() || '—';
+  const ras = parseFloat(document.getElementById('ap-ras').value) || 0;
+  const espn = parseInt(document.getElementById('ap-espn').value) || 999;
+  const pff = parseInt(document.getElementById('ap-pff').value) || 999;
+  const pfsn = parseInt(document.getElementById('ap-pfsn').value) || 999;
+  const cbs = parseInt(document.getElementById('ap-cbs').value) || 999;
+  const notes = document.getElementById('ap-notes').value.trim();
+  const school = document.getElementById('ap-school').value.trim() || '—';
+
+  PROSPECTS.push({ id: newId, name, pos, school, height, weight, forty, ras, espn, pff, pfsn, cbs, notes, arm: '—', myRank: PROSPECTS.length + 1, grade: 70 });
+  saveProspects();
+  closeAddProspectModal();
+  renderBoard();
+  showToast(`✅ ${name} added to the board`);
+}
+
 // ── TIERS ─────────────────────────────────────────────────────────────
 function saveTiers() { try { localStorage.setItem('nfl_tiers', JSON.stringify(TIERS)); } catch(e) {} }
-function loadTiers() { try { const s = localStorage.getItem('nfl_tiers'); if (s) TIERS = JSON.parse(s); } catch(e) {} }
+function loadTiers() {
+  try {
+    const s = localStorage.getItem('nfl_tiers');
+    if (!s) return;
+    const parsed = JSON.parse(s);
+    // Migrate old {name, startIdx} format to {name, afterId}
+    TIERS = parsed.map(t => {
+      if (t.afterId !== undefined) return t;
+      const idx = t.startIdx - 1;
+      const p = PROSPECTS[idx];
+      return p ? { name: t.name, afterId: p.id } : null;
+    }).filter(Boolean);
+  } catch(e) {}
+}
 
 function toggleTierZones() {
   showTierZones = !showTierZones;
@@ -3224,26 +3402,26 @@ function toggleTierZones() {
   renderBoard();
 }
 
-function addTierAfter(origIdx) {
+function addTierAfter(afterId) {
   const name = prompt('Tier name (e.g. "Round 1", "Elite"):', 'Tier');
   if (!name) return;
-  const startIdx = origIdx + 1;
-  if (startIdx >= PROSPECTS.length) return;
-  TIERS = TIERS.filter(t => t.startIdx !== startIdx);
-  TIERS.push({ name, startIdx });
-  TIERS.sort((a, b) => a.startIdx - b.startIdx);
+  // Don't add a tier after the last prospect
+  const p = PROSPECTS.find(x => x.id == afterId);
+  if (!p || PROSPECTS.indexOf(p) >= PROSPECTS.length - 1) return;
+  TIERS = TIERS.filter(t => t.afterId != afterId);
+  TIERS.push({ name, afterId: p.id });
   saveTiers();
   renderBoard();
 }
 
-function deleteTier(startIdx) {
-  TIERS = TIERS.filter(t => t.startIdx !== startIdx);
+function deleteTier(afterId) {
+  TIERS = TIERS.filter(t => t.afterId != afterId);
   saveTiers();
   renderBoard();
 }
 
-function renameTier(startIdx) {
-  const tier = TIERS.find(t => t.startIdx === startIdx);
+function renameTier(afterId) {
+  const tier = TIERS.find(t => t.afterId == afterId);
   if (!tier) return;
   const name = prompt('Rename tier:', tier.name);
   if (!name) return;
@@ -3277,11 +3455,11 @@ function autoTier() {
   drops.sort((a, b) => b.drop - a.drop);
   const breakPoints = drops.slice(0, 4).map(d => d.startIdx).sort((a, b) => a - b);
 
+  // afterId = ID of the last prospect before the break (startIdx - 1)
   TIERS = breakPoints.map((startIdx, slot) => ({
     name: tierNames[slot + 1] || `Tier ${slot + 2}`,
-    startIdx,
+    afterId: PROSPECTS[startIdx - 1].id,
   }));
-  TIERS.sort((a, b) => a.startIdx - b.startIdx);
   saveTiers();
   showTierZones = false;
   const btn = document.getElementById('tiers-toggle-btn');
