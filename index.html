@@ -506,6 +506,12 @@ let dragSrcIdx = null;
 let aiHistory = [];
 
 // ── HELPERS ──────────────────────────────────────────────────────────
+function heightToInches(h) {
+  if (!h || h === '—') return 0;
+  const m = h.match(/^(\d+)-(\d+)$/);
+  return m ? parseInt(m[1]) * 12 + parseInt(m[2]) : 0;
+}
+
 function computeGrade(p) {
   const ranks = [p.espn, p.pff, p.pfsn, p.cbs].filter(r => r > 0 && r < 999);
   if (ranks.length === 0) return p.grade || 60;
@@ -888,7 +894,7 @@ function renderCompare() {
     { label:'PFF Rank',       keyA:'#'+a.pff,          keyB:'#'+b.pff,          numA:a.pff,              numB:b.pff,              higher:false },
     { label:'PFSN Rank',      keyA:'#'+a.pfsn,         keyB:'#'+b.pfsn,         numA:a.pfsn,             numB:b.pfsn,             higher:false },
     { label:'CBS Rank',       keyA:'#'+a.cbs,          keyB:'#'+b.cbs,          numA:a.cbs,              numB:b.cbs,              higher:false },
-    { label:'Height',         keyA:a.height!=='—'?a.height:'—',  keyB:b.height!=='—'?b.height:'—',  numA:0, numB:0, higher:true },
+    { label:'Height',         keyA:a.height!=='—'?a.height:'—',  keyB:b.height!=='—'?b.height:'—',  numA:heightToInches(a.height), numB:heightToInches(b.height), higher:true },
     { label:'Weight',         keyA:a.weight+' lbs',  keyB:b.weight+' lbs',  numA:a.weight,           numB:b.weight,           higher:true  },
     { label:'RAS Score',      keyA:a.ras>0?a.ras.toFixed(2):'—', keyB:b.ras>0?b.ras.toFixed(2):'—', numA:a.ras||0, numB:b.ras||0, higher:true },
     { label:'40-Yard Dash',   keyA:a.forty!=='—'?a.forty+'s':'—', keyB:b.forty!=='—'?b.forty+'s':'—', numA:parseFloat(a.forty)||0, numB:parseFloat(b.forty)||0, higher:false },
