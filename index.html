@@ -1100,7 +1100,7 @@ function normalizePos(raw) {
     'WIDE RECEIVER':'WR','TIGHT END':'TE',
     'OFFENSIVE TACKLE':'OT','LEFT TACKLE':'OT','RIGHT TACKLE':'OT','OL':'OT',
     'OFFENSIVE GUARD':'IOL','INTERIOR OFFENSIVE LINE':'IOL','OG':'IOL','GUARD':'IOL',
-    'CENTER':'C',
+    'CENTER':'C','OC':'C',
     'DEFENSIVE TACKLE':'DT','NOSE TACKLE':'DT','NT':'DT','IDL':'DT',
     'DEFENSIVE END':'EDGE','EDGE RUSHER':'EDGE','DE':'EDGE','ED':'EDGE',
     'HB':'RB','T':'OT','G':'IOL','DI':'DT',
@@ -1111,7 +1111,7 @@ function normalizePos(raw) {
   return map[p] || p;
 }
 
-function rowsToProspects(rows, mapping) {
+function rowsToProspects(rows, mapping, skipPosFilter) {
   const get = (row, key) => {
     const idx = mapping[key];
     return (idx !== undefined && idx >= 0 && row[idx] !== undefined) ? row[idx].trim() : '';
@@ -1123,8 +1123,10 @@ function rowsToProspects(rows, mapping) {
     const name = get(row, 'name');
     const rawPos = get(row, 'pos');
     const normalPos = normalizePos(rawPos);
-    // Skip junk rows: no name, name looks like a sentence, or unrecognized position
-    if (!name || name.split(' ').length > 5 || !VALID_POS.has(normalPos)) return null;
+    // Skip junk rows: no name or name looks like a sentence
+    // For combine/RAS mode skip the position filter since positions like OC may not be in the map
+    if (!name || name.split(' ').length > 5) return null;
+    if (!skipPosFilter && !VALID_POS.has(normalPos)) return null;
     const rankRaw = get(row, 'rank');
     const rank = parseInt(rankRaw) || (i + 1);
     const grade = parseInt(get(row, 'grade')) || gradeFromRank(rank);
@@ -1274,7 +1276,7 @@ function renderImportStep() {
   }
 
   else if (IMP.step === 4) {
-    const incoming = rowsToProspects(IMP.rows, IMP.mapping);
+    const incoming = rowsToProspects(IMP.rows, IMP.mapping, IMP.rankTarget === 'combine');
     const existing = new Set(PROSPECTS.map(p=>p.name.toLowerCase()));
     const newOnes = incoming.filter(p=>!existing.has(p.name.toLowerCase()));
     const dupes = incoming.length - newOnes.length;
@@ -1333,14 +1335,15 @@ function appendPasteData() {
 }
 
 function confirmImport() {
-  const incoming = rowsToProspects(IMP.rows, IMP.mapping);
+  const isCombine = IMP.rankTarget === 'combine';
+  const incoming = rowsToProspects(IMP.rows, IMP.mapping, isCombine);
 
   if (IMP.importMode === 'replace') {
     PROSPECTS.length = 0;
     PROSPECTS.push(...incoming);
     showToast(`✓ Imported ${incoming.length} prospects`);
 
-  } else if (IMP.rankTarget === 'combine') {
+  } else if (isCombine) {
     const existingMap = new Map(PROSPECTS.map(p => [p.name.toLowerCase(), p]));
     let updated = 0, added = 0;
     incoming.forEach(p => {
