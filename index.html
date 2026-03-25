@@ -213,11 +213,17 @@
   .badge-new { background: var(--green); color: #000; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
 
   .board-panel, .detail-content { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .mock-picks-panel { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .mock-picks-panel::-webkit-scrollbar { width: 4px; }
+  .mock-picks-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .mock-board-panel { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .mock-board-panel::-webkit-scrollbar { width: 4px; }
+  .mock-board-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
   /* MOCK DRAFT */
   .mock-layout { display:flex; gap:0; height:calc(100vh - 120px); width:100%; }
   .mock-picks-panel { width:360px; border-right:1px solid var(--border); overflow-y:auto; flex-shrink:0; }
-  .mock-board-panel { flex:1; overflow-y:auto; padding:16px; }
+  .mock-board-panel { flex:1; overflow-y:auto; }
   .mock-round-header { font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:2px; color:var(--gold); padding:10px 16px 6px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface); z-index:1; }
   .mock-pick-row { display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; }
   .mock-pick-row:hover { background:var(--surface2); }
@@ -367,7 +373,9 @@
       </div>
       <button id="sim-to-my-pick-btn" class="btn btn-blue" onclick="simulateToMyPick()" style="display:none;font-size:12px;">⚡ Sim to My Pick</button>
     </div>
-    <div style="display:flex;gap:8px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span id="mock-progress-counter" style="font-size:11px;color:var(--muted);white-space:nowrap;"></span>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="simAllRemaining()">⚡ Sim All</button>
       <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
     </div>
@@ -1940,16 +1948,27 @@ let myMockTeam = null;
 let mockProfileProspect = null;
 let mockProfileTab = 'profile';
 let mockOtisHistory = [];
+const mockOtisHistories = new Map(); // persists per prospect while draft is open
+let mockBoardSearch = '';
 
 function saveMockDraft() {
-  try { localStorage.setItem('nfl_mock_draft', JSON.stringify(MOCK_PICKS.map(p => p.playerId))); } catch(e) {}
+  try { localStorage.setItem('nfl_mock_draft', JSON.stringify(MOCK_PICKS.map(p => ({ id: p.playerId, sim: p.simulated || false })))); } catch(e) {}
 }
 function loadMockDraft() {
   try {
     const saved = localStorage.getItem('nfl_mock_draft');
     if (saved) {
-      const ids = JSON.parse(saved);
-      ids.forEach((id, i) => { if (MOCK_PICKS[i]) MOCK_PICKS[i].playerId = id; });
+      const data = JSON.parse(saved);
+      data.forEach((d, i) => {
+        if (!MOCK_PICKS[i]) return;
+        if (d && typeof d === 'object') {
+          MOCK_PICKS[i].playerId = d.id;
+          MOCK_PICKS[i].simulated = d.sim || false;
+        } else {
+          MOCK_PICKS[i].playerId = d; // backwards compat
+          MOCK_PICKS[i].simulated = false;
+        }
+      });
     }
   } catch(e) {}
 }
@@ -1974,6 +1993,9 @@ function renderMockDraft() {
   populateMyMockTeamSelect();
   renderMockPicks();
   renderMockBoard();
+  const made = MOCK_PICKS.filter(p => p.playerId).length;
+  const counter = document.getElementById('mock-progress-counter');
+  if (counter) counter.textContent = `${made} / ${MOCK_PICKS.length} picks`;
 }
 
 function renderMockPicks() {
@@ -2045,7 +2067,7 @@ function renderMockBoard() {
   if (!selectedMockPick) {
     hint = `<div class="mock-hint">← Select a pick on the left to assign a player</div>`;
   } else {
-    hint = `<div class="mock-hint" style="color:var(--gold);">Assigning: Pick #${selectedMockPick} · ${pick?.team}</div>`;
+    hint = `<div class="mock-hint" style="color:var(--gold);">Pick #${selectedMockPick} · ${pick?.team} — click a player to view &amp; draft</div>`;
   }
 
   // Team needs card
@@ -2079,10 +2101,20 @@ function renderMockBoard() {
       ${filterBtns}
     </div>`;
 
+  // Search bar
+  const searchBar = `
+    <div style="padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface);">
+      <input type="text" placeholder="Search players..." value="${mockBoardSearch.replace(/"/g,'&quot;')}"
+        oninput="mockBoardSearch=this.value;renderMockBoard()"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;" />
+    </div>`;
+
   // Player rows — drafted players hidden, click opens profile
+  const searchLower = mockBoardSearch.toLowerCase();
   const rows = sortedMockProspects()
     .filter(p => !draftedIds.has(p.id))
     .filter(p => mockBoardFilter === 'ALL' || p.pos === mockBoardFilter)
+    .filter(p => !searchLower || p.name.toLowerCase().includes(searchLower) || p.school.toLowerCase().includes(searchLower) || p.pos.toLowerCase().includes(searchLower))
     .map(p => {
       const fillsNeed = needs.includes(p.pos);
       const needDot = fillsNeed
@@ -2101,7 +2133,7 @@ function renderMockBoard() {
       </div>`;
     }).join('');
 
-  panel.innerHTML = hint + needsCard + sortBar + filterBar + rows;
+  panel.innerHTML = hint + needsCard + sortBar + filterBar + searchBar + rows;
 }
 
 function selectMockPick(pickNum) {
@@ -2116,12 +2148,18 @@ function assignMockPick(playerId) {
   // If player already drafted elsewhere, remove that assignment
   MOCK_PICKS.forEach(p => { if (p.playerId === playerId) p.playerId = null; });
   pick.playerId = playerId;
-  // Auto-advance to next empty pick
-  const nextEmpty = MOCK_PICKS.find(p => !p.playerId && p.pick > selectedMockPick);
-  selectedMockPick = nextEmpty ? nextEmpty.pick : null;
-  saveMockDraft();
-  renderMockDraft();
-  renderBoard();
+  pick.simulated = false;
+  if (myMockTeam && isMyPick(pick)) {
+    // In single-team mode, auto-sim to the next user pick
+    saveMockDraft();
+    simulateToMyPick();
+  } else {
+    const nextEmpty = MOCK_PICKS.find(p => !p.playerId && p.pick > selectedMockPick);
+    selectedMockPick = nextEmpty ? nextEmpty.pick : null;
+    saveMockDraft();
+    renderMockDraft();
+    renderBoard();
+  }
 }
 
 function removeMockPick(pickNum) {
@@ -2157,9 +2195,9 @@ function simulateSinglePick(pick) {
   const available = [...PROSPECTS].filter(p => !draftedIds.has(p.id))
     .sort((a, b) => computeGrade(b) - computeGrade(a));
   if (!available.length) return;
-  // Pool size grows with round for realism
   const poolSize = Math.min(available.length, pick.round * 3);
   pick.playerId = available[Math.floor(Math.random() * poolSize)].id;
+  pick.simulated = true;
 }
 
 function simulateToMyPick() {
@@ -2187,13 +2225,23 @@ function simulateToMyPick() {
   }
 }
 
+function simAllRemaining() {
+  const remaining = MOCK_PICKS.filter(p => !p.playerId);
+  if (!remaining.length) { showToast('All picks already made'); return; }
+  remaining.forEach(simulateSinglePick);
+  saveMockDraft();
+  renderMockDraft();
+  renderBoard();
+  showToast(`Simulated ${remaining.length} remaining picks`);
+}
+
 // ── MOCK PLAYER PROFILE ───────────────────────────────────────────────
 function openMockProfile(prospectId) {
   const p = PROSPECTS.find(x => x.id === prospectId);
   if (!p) return;
   mockProfileProspect = p;
   mockProfileTab = 'profile';
-  mockOtisHistory = [];
+  mockOtisHistory = mockOtisHistories.get(p.id) || [];
 
   document.getElementById('mock-profile-name').textContent = p.name;
   document.getElementById('mock-profile-sub').textContent = `${p.pos} · ${p.school}`;
@@ -2222,13 +2270,20 @@ function assignFromProfile() {
   if (!pick) return;
   MOCK_PICKS.forEach(p => { if (p.playerId === mockProfileProspect.id) p.playerId = null; });
   pick.playerId = mockProfileProspect.id;
-  const nextEmpty = MOCK_PICKS.find(p => !p.playerId && p.pick > selectedMockPick);
-  selectedMockPick = nextEmpty ? nextEmpty.pick : null;
-  saveMockDraft();
+  pick.simulated = false;
+  const playerName = mockProfileProspect.name;
   closeMockProfile();
-  renderMockDraft();
-  renderBoard();
-  showToast(`✓ ${mockProfileProspect.name} assigned`);
+  if (myMockTeam && isMyPick(pick)) {
+    saveMockDraft();
+    simulateToMyPick();
+  } else {
+    const nextEmpty = MOCK_PICKS.find(p => !p.playerId && p.pick > selectedMockPick);
+    selectedMockPick = nextEmpty ? nextEmpty.pick : null;
+    saveMockDraft();
+    renderMockDraft();
+    renderBoard();
+  }
+  showToast(`✓ ${playerName} assigned`);
 }
 
 function switchMockProfileTab(tab) {
@@ -2335,12 +2390,13 @@ async function mockAskOtis(question) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6', max_tokens: 600,
         system: `You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements. Keep responses to 3-5 sentences unless more detail is needed.\n\nProspect Data:\n${ctx}`,
-        messages: [{ role: 'user', content: question }],
+        messages: mockOtisHistory,
       }),
     });
     const data = await res.json();
     const answer = data.error ? `⚠️ ${data.error.message}` : (data.content?.[0]?.text || 'No response.');
     mockOtisHistory.push({ role: 'assistant', content: answer });
+    mockOtisHistories.set(p.id, mockOtisHistory);
   } catch(err) {
     mockOtisHistory.push({ role: 'assistant', content: `⚠️ ${err.message}` });
   }
@@ -2431,10 +2487,13 @@ function buildTeamReport() {
   });
 
   return Object.entries(teams).map(([team, picks]) => {
-    const filled = picks.filter(p => p.playerId);
+    const allFilled = picks.filter(p => p.playerId);
+    // Only grade real (non-simulated) picks
+    const filled = allFilled.filter(p => !p.simulated);
+    const simCount = allFilled.length - filled.length;
     const scores = filled.map(valueScore).filter(v => v !== null);
     const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-    return { team, picks, filled, avg, grade: avg !== null ? gradeFromValue(avg) : null };
+    return { team, picks, filled, simCount, avg, grade: avg !== null ? gradeFromValue(avg) : null };
   }).sort((a, b) => (b.avg ?? -999) - (a.avg ?? -999));
 }
 
@@ -2453,7 +2512,7 @@ function renderReportCard() {
   const report = buildTeamReport();
   const body = document.getElementById('report-body');
 
-  const rows = report.map(({ team, picks, filled, avg, grade }) => {
+  const rows = report.map(({ team, picks, filled, simCount, avg, grade }) => {
     if (filled.length === 0) return '';
     const needs = TEAM_NEEDS[team] || [];
     const needsBadges = needs.map(pos =>
@@ -2492,6 +2551,7 @@ function renderReportCard() {
         <td>
           ${avgStr}
           <div style="font-size:10px;color:var(--muted);margin-top:2px;">${needsAddressed}/${filled.length} needs</div>
+          ${simCount > 0 ? `<div style="font-size:10px;color:var(--muted);margin-top:1px;">(+${simCount} simulated not graded)</div>` : ''}
         </td>
         <td><div class="rc-picks-list">${picksList}</div></td>
         <td style="min-width:120px;">
