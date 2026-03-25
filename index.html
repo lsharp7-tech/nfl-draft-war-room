@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NFL Draft War Room</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #12151c;
+    --surface2: #1a1e28;
+    --border: #252a38;
+    --gold: #d4a017;
+    --gold2: #f0c040;
+    --red: #e03030;
+    --green: #27ae60;
+    --blue: #3b82f6;
+    --text: #e8eaf0;
+    --muted: #7a8099;
+    --accent: #ff6b35;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, #0f1218 0%, #1a1020 100%);
+    border-bottom: 2px solid var(--gold);
+    padding: 16px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { font-size: 28px; }
+  .logo h1 { font-family: 'Bebas Neue', sans-serif; font-size: 26px; letter-spacing: 3px; color: var(--gold2); line-height: 1; }
+  .logo span { font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; display: block; }
+  .header-actions { display: flex; gap: 10px; align-items: center; }
+  .btn { padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+  .btn-gold { background: var(--gold); color: #000; }
+  .btn-gold:hover { background: var(--gold2); transform: translateY(-1px); }
+  .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-red:hover { background: #c02020; }
+  .btn-blue { background: var(--blue); color: #fff; }
+  .btn-blue:hover { background: #2563eb; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 28px; background: var(--surface); }
+  .tab { padding: 13px 22px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; letter-spacing: 0.5px; text-transform: uppercase; }
+  .tab.active { color: var(--gold2); border-bottom-color: var(--gold2); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* LAYOUT */
+  .main { display: flex; height: calc(100vh - 111px); }
+  .panel { overflow-y: auto; }
+  .panel::-webkit-scrollbar { width: 5px; }
+  .panel::-webkit-scrollbar-track { background: var(--bg); }
+  .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* LEFT: BOARD */
+  .board-panel { flex: 1; border-right: 1px solid var(--border); padding: 20px; }
+  .board-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .board-header h2 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; color: var(--gold); }
+  .search-bar { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; margin-bottom: 10px; }
+  .search-bar:focus { outline: none; border-color: var(--gold); }
+  .search-bar::placeholder { color: var(--muted); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .filter-btn.active { background: var(--gold); color: #000; border-color: var(--gold); }
+  .filter-btn:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
+
+  /* PROSPECT ROW */
+  .prospect-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 6px;
+    cursor: grab; transition: all 0.15s; position: relative;
+    user-select: none;
+  }
+  .prospect-row:active { cursor: grabbing; }
+  .prospect-row.dragging { opacity: 0.4; }
+  .prospect-row.drag-over { border-color: var(--gold); background: #1a1800; transform: scale(1.01); }
+  .prospect-row.selected { border-color: var(--blue); background: #0d1625; }
+  .prospect-row:hover { border-color: #3a4060; background: var(--surface2); }
+  .rank-badge { min-width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: 'Bebas Neue', sans-serif; font-size: 16px; font-weight: 400; }
+  .rank-1 { background: linear-gradient(135deg, #d4a017, #f0c040); color: #000; }
+  .rank-2 { background: linear-gradient(135deg, #888, #bbb); color: #000; }
+  .rank-3 { background: linear-gradient(135deg, #a0522d, #cd853f); color: #fff; }
+  .rank-other { background: var(--surface2); color: var(--muted); font-size: 13px; }
+  .pos-badge { padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; min-width: 32px; text-align: center; }
+  .pos-QB   { background: #7c2d12; color: #fed7aa; }
+  .pos-WR   { background: #14532d; color: #86efac; }
+  .pos-CB   { background: #1e3a5f; color: #93c5fd; }
+  .pos-EDGE { background: #3b0764; color: #d8b4fe; }
+  .pos-OT   { background: #78350f; color: #fde68a; }
+  .pos-DT   { background: #1c1917; color: #d6d3d1; border: 1px solid #57534e; }
+  .pos-TE   { background: #0c4a6e; color: #7dd3fc; }
+  .pos-S    { background: #064e3b; color: #6ee7b7; }
+  .pos-RB   { background: #450a0a; color: #fca5a5; }
+  .pos-LB   { background: #422006; color: #fdba74; }
+  .pos-IOL  { background: #1a2e05; color: #a3e635; }
+  .pos-C    { background: #1a2e05; color: #a3e635; }
+  .prospect-info { flex: 1; min-width: 0; }
+  .prospect-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prospect-school { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .ranking-chips { display: flex; gap: 4px; }
+  .chip { padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .chip-espn { background: #c41c00; color: #fff; }
+  .chip-pff  { background: #1a3f6f; color: #7dd3fc; }
+  .chip-pfsn { background: #013369; color: #d4af37; }
+  .chip-cbs  { background: #254d8c; color: #9fc3f8; }
+  .prospect-row .actions { display: none; gap: 4px; }
+  .prospect-row:hover .actions { display: flex; }
+  .row-btn { padding: 4px 8px; font-size: 11px; border-radius: 4px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; }
+  .row-btn-compare { background: var(--blue); color: #fff; }
+  .row-btn-ai { background: var(--gold); color: #000; }
+  .drag-handle { color: var(--border); font-size: 14px; cursor: grab; padding: 2px 4px; }
+
+  /* RIGHT: DETAIL / AI */
+  .detail-panel { width: 380px; background: var(--surface); border-left: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; }
+  .detail-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .detail-tab { flex: 1; padding: 12px; text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; }
+  .detail-tab.active { color: var(--gold2); border-bottom-color: var(--gold2); }
+  .detail-content { flex: 1; overflow-y: auto; padding: 18px; }
+  .detail-content::-webkit-scrollbar { width: 4px; }
+  .detail-content::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* PROSPECT DETAIL */
+  .detail-hero { text-align: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .detail-pos { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); margin-bottom: 4px; }
+  .detail-name { font-family: 'Bebas Neue', sans-serif; font-size: 30px; letter-spacing: 2px; line-height: 1; }
+  .detail-school { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .grade-bar-wrap { background: var(--bg); border-radius: 20px; height: 8px; margin-top: 6px; overflow: hidden; }
+  .grade-bar { height: 100%; border-radius: 20px; transition: width 0.8s ease; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-card { background: var(--bg); border-radius: 8px; padding: 10px; border: 1px solid var(--border); }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500; color: var(--text); margin-top: 2px; }
+  .rankings-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  .rankings-table th { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+  .rankings-table td { padding: 8px; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .rankings-table tr:last-child td { border-bottom: none; }
+  .source-name { font-weight: 600; }
+  .rank-num { font-family: 'DM Mono', monospace; font-weight: 600; }
+  .section-title { font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 14px; color: var(--gold); margin-bottom: 10px; }
+
+  /* AI */
+  .ai-question-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ai-chip { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font-size: 11px; cursor: pointer; transition: all 0.15s; }
+  .ai-chip:hover { border-color: var(--gold); color: var(--gold); }
+  .ai-input-row { display: flex; gap: 8px; }
+  .ai-input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; resize: none; }
+  .ai-input:focus { outline: none; border-color: var(--gold); }
+  .ai-history { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ai-msg { border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.6; }
+  .ai-msg-user { background: #162040; color: #93c5fd; align-self: flex-end; max-width: 90%; }
+  .ai-msg-ai { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+  .ai-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+
+  /* COMPARE */
+  .compare-val { font-family: 'DM Mono', monospace; font-weight: 600; }
+  .compare-val.better { color: var(--green); }
+  .compare-val.worse { color: var(--red); }
+  .compare-select { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; color: var(--text); font-size: 12px; width: 100%; margin-bottom: 12px; font-family: 'DM Sans', sans-serif; }
+
+  /* EMPTY STATE */
+  .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 13px; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface2); border: 1px solid var(--gold); border-radius: 8px; padding: 12px 18px; font-size: 13px; color: var(--text); z-index: 999; transform: translateY(80px); opacity: 0; transition: all 0.3s; pointer-events: none; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* IMPORT MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 300; display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 32px 16px; }
+  .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 720px; flex-shrink: 0; }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+  .modal-header h2 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; color: var(--gold); }
+  .modal-close { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-family: 'DM Sans', sans-serif; }
+  .modal-close:hover { border-color: var(--red); color: var(--red); }
+  .modal-body { padding: 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+  .step-indicator { display: flex; margin-bottom: 24px; }
+  .step { flex: 1; text-align: center; padding: 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); border-bottom: 2px solid var(--border); transition: all 0.2s; }
+  .step.active { color: var(--gold2); border-bottom-color: var(--gold2); }
+  .step.done { color: var(--green); border-bottom-color: var(--green); }
+  .import-textarea { width: 100%; height: 180px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; resize: vertical; }
+  .import-textarea:focus { outline: none; border-color: var(--gold); }
+  .import-textarea::placeholder { color: var(--muted); }
+  .col-map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .col-map-row { display: flex; flex-direction: column; gap: 4px; }
+  .col-map-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .col-map-select { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; color: var(--text); font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer; }
+  .preview-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 16px; }
+  .preview-table th { background: var(--bg); padding: 8px 10px; text-align: left; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+  .preview-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; white-space: nowrap; overflow: hidden; max-width: 120px; text-overflow: ellipsis; }
+  .preview-table tr:hover td { background: var(--surface2); }
+  .source-btn { padding: 10px 18px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
+  .source-btn.active { border-color: var(--gold); color: var(--gold); background: #1a1400; }
+  .import-instructions { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  .import-instructions ol { margin-left: 16px; }
+  .import-instructions li { font-size: 13px; color: var(--muted); line-height: 2; }
+  .import-instructions strong { color: var(--text); }
+  .import-stat { background: var(--bg); border: 1px solid var(--green); border-radius: 8px; padding: 14px 16px; text-align: center; }
+  .import-stat .big { font-family: 'Bebas Neue', sans-serif; font-size: 48px; color: var(--green); line-height: 1; }
+  .import-stat .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .mode-btn { padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
+  .mode-btn.active { border-color: var(--blue); color: var(--blue); background: #0d1625; }
+  .badge-new { background: var(--green); color: #000; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
+
+  .board-panel, .detail-content { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏈</div>
+    <div>
+      <h1>NFL Draft War Room</h1>
+      <span>2026 Draft Class · Big Board</span>
+    </div>
+  </div>
+  <div class="header-actions">
+    <span id="prospect-count" style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
+    <button class="btn btn-outline" onclick="openImportModal()">⬆ Import Players</button>
+    <button class="btn btn-outline" onclick="openKeyModal()" id="key-btn">🔑 API Key</button>
+    <button class="btn btn-outline" onclick="deduplicateProspects()">🧹 Dedupe</button>
+    <button class="btn btn-outline" onclick="resetRankings()">Reset Order</button>
+    <button class="btn btn-gold" onclick="openAITab()">🤖 AI Analysis</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchView('board',this)">📋 My Big Board</div>
+  <div class="tab" onclick="switchView('compare',this)">⚖️ Compare</div>
+</div>
+
+<div class="main">
+  <div class="board-panel panel" id="board-panel">
+    <div class="board-header">
+      <h2>Big Board Rankings</h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Sort:</span>
+        <button class="filter-btn active" id="sort-my" onclick="sortBoard('my',this)">My Board</button>
+        <button class="filter-btn" id="sort-grade" onclick="sortBoard('grade',this)">Grade</button>
+        <button class="filter-btn" id="sort-espn" onclick="sortBoard('espn',this)">ESPN</button>
+        <button class="filter-btn" id="sort-pff" onclick="sortBoard('pff',this)">PFF</button>
+        <button class="filter-btn" id="sort-pfsn" onclick="sortBoard('pfsn',this)">PFSN</button>
+        <button class="filter-btn" id="sort-cbs" onclick="sortBoard('cbs',this)">CBS</button>
+        <button class="filter-btn" id="sort-ras" onclick="sortBoard('ras',this)">RAS</button>
+      </div>
+    </div>
+    <input class="search-bar" id="search-input" type="text" placeholder="Search by name or school..." oninput="renderBoard()">
+    <div class="filters" id="filters">
+      <button class="filter-btn active" onclick="filterPos('ALL',this)">ALL</button>
+      <button class="filter-btn" onclick="filterPos('QB',this)">QB</button>
+      <button class="filter-btn" onclick="filterPos('WR',this)">WR</button>
+      <button class="filter-btn" onclick="filterPos('EDGE',this)">EDGE</button>
+      <button class="filter-btn" onclick="filterPos('CB',this)">CB</button>
+      <button class="filter-btn" onclick="filterPos('OT',this)">OT</button>
+      <button class="filter-btn" onclick="filterPos('DT',this)">DT</button>
+      <button class="filter-btn" onclick="filterPos('TE',this)">TE</button>
+      <button class="filter-btn" onclick="filterPos('S',this)">S</button>
+      <button class="filter-btn" onclick="filterPos('RB',this)">RB</button>
+      <button class="filter-btn" onclick="filterPos('LB',this)">LB</button>
+      <button class="filter-btn" onclick="filterPos('IOL',this)">IOL</button>
+      <button class="filter-btn" onclick="filterPos('C',this)">C</button>
+    </div>
+    <div id="prospect-list"></div>
+  </div>
+
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-tabs">
+      <div class="detail-tab active" id="tab-detail" onclick="switchDetailTab('detail')">Profile</div>
+      <div class="detail-tab" id="tab-ai" onclick="switchDetailTab('ai')">🤖 AI Scout</div>
+    </div>
+    <div class="detail-content" id="detail-content">
+      <div class="empty-state">
+        <div class="icon">🎯</div>
+        <p>Click a prospect to see<br>their full profile and AI scouting report</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- COMPARE VIEW -->
+<div id="compare-view" style="display:none; padding:20px; width:100%;">
+  <div style="display:flex;gap:16px;margin-bottom:20px;align-items:center;">
+    <h2 style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px;color:var(--gold);font-size:22px;">PROSPECT COMPARISON</h2>
+    <span style="font-size:12px;color:var(--muted)">Select two prospects to compare side-by-side</span>
+  </div>
+  <div style="display:flex;gap:16px;margin-bottom:20px;">
+    <div style="flex:1;">
+      <div class="ai-label">Prospect A</div>
+      <select class="compare-select" id="compare-a" style="font-size:14px;padding:10px;" onchange="renderCompare()"></select>
+    </div>
+    <div style="flex:1;">
+      <div class="ai-label">Prospect B</div>
+      <select class="compare-select" id="compare-b" style="font-size:14px;padding:10px;" onchange="renderCompare()"></select>
+    </div>
+    <div style="display:flex;align-items:flex-end;">
+      <button class="btn btn-gold" onclick="compareWithAI()">🤖 AI Verdict</button>
+    </div>
+  </div>
+  <div id="compare-output"></div>
+  <div id="compare-ai-output" style="margin-top:16px;"></div>
+</div>
+
+<!-- API KEY MODAL -->
+<div id="key-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeKeyModal()">
+  <div class="modal-box" style="max-width:440px;">
+    <div class="modal-header">
+      <h2>🔑 Anthropic API Key</h2>
+      <button class="modal-close" onclick="closeKeyModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        Your key is stored only in your browser (localStorage) and never sent anywhere except directly to Anthropic.
+      </div>
+      <div class="ai-label">API Key</div>
+      <input id="api-key-input" type="password"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;margin-bottom:8px;"
+        placeholder="sk-ant-...">
+      <div style="font-size:11px;color:var(--muted);">Get your key at console.anthropic.com → API Keys</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="clearApiKey()">Clear Key</button>
+      <button class="btn btn-gold" onclick="saveApiKey()">Save Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div id="import-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeImportModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>📥 Import Prospects</h2>
+      <button class="modal-close" onclick="closeImportModal()">✕ Close</button>
+    </div>
+    <div class="modal-body">
+      <div class="step-indicator">
+        <div class="step active" id="imp-step-1">1 · Source</div>
+        <div class="step" id="imp-step-2">2 · Paste Data</div>
+        <div class="step" id="imp-step-3">3 · Map Columns</div>
+        <div class="step" id="imp-step-4">4 · Import</div>
+      </div>
+      <div id="imp-body"></div>
+    </div>
+    <div class="modal-footer" id="imp-footer"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── PROSPECT DATA ────────────────────────────────────────────────────
+const PROSPECTS = [
+  { id:1,  name:"Arvell Reese",         pos:"EDGE", school:"Ohio State",    height:"6-4", weight:241, forty:"4.62", arm:"34", grade:98, myRank:1,  espn:1,  pff:1,  pfsn:1,  cbs:2,  notes:"Explosive pass rusher with elite first-step quickness and relentless motor. Top prospect in the 2026 class." },
+  { id:2,  name:"Jeremiyah Love",        pos:"RB",   school:"Notre Dame",    height:"6-0", weight:212, forty:"4.38", arm:"31", grade:97, myRank:2,  espn:2,  pff:3,  pfsn:2,  cbs:1,  notes:"Elite speed, elusiveness and contact balance. Best RB prospect in years with receiving chops to match." },
+  { id:3,  name:"Sonny Styles",          pos:"LB",   school:"Ohio State",    height:"6-5", weight:244, forty:"4.52", arm:"33", grade:96, myRank:3,  espn:3,  pff:2,  pfsn:3,  cbs:3,  notes:"Freakish athlete who can line up at LB or S. Exceptional instincts and elite coverage range." },
+  { id:4,  name:"Fernando Mendoza",      pos:"QB",   school:"Indiana",       height:"6-5", weight:236, forty:"4.76", arm:"34", grade:95, myRank:4,  espn:4,  pff:4,  pfsn:4,  cbs:4,  notes:"Prototypical pocket passer with elite arm talent and outstanding processing speed at the line." },
+  { id:5,  name:"David Bailey",          pos:"EDGE", school:"Texas Tech",    height:"6-4", weight:251, forty:"4.56", arm:"34", grade:93, myRank:5,  espn:5,  pff:5,  pfsn:5,  cbs:6,  notes:"Relentless motor with explosive first step and a well-developed pass-rush arsenal." },
+  { id:6,  name:"Francis Mauigoa",       pos:"OT",   school:"Miami",         height:"6-6", weight:329, forty:"5.08", arm:"35", grade:93, myRank:6,  espn:6,  pff:6,  pfsn:6,  cbs:5,  notes:"Mammoth left tackle with imposing size and surprising athleticism in pass sets." },
+  { id:7,  name:"Caleb Downs",           pos:"S",    school:"Ohio State",    height:"6-0", weight:206, forty:"4.41", arm:"31", grade:92, myRank:7,  espn:8,  pff:7,  pfsn:7,  cbs:8,  notes:"High-IQ centerfield safety with elite instincts, physicality, and ball-hawking skills." },
+  { id:8,  name:"Carnell Tate",          pos:"WR",   school:"Ohio State",    height:"6-2", weight:192, forty:"4.46", arm:"32", grade:91, myRank:8,  espn:7,  pff:8,  pfsn:8,  cbs:7,  notes:"Precise route runner with outstanding body control, elite YAC, and great hands." },
+  { id:9,  name:"Makai Lemon",           pos:"WR",   school:"USC",           height:"5-11",weight:192, forty:"4.38", arm:"31", grade:90, myRank:9,  espn:9,  pff:9,  pfsn:9,  cbs:9,  notes:"Electric playmaker with elite speed, crisp routes, and outstanding after-catch ability." },
+  { id:10, name:"Kenyon Sadiq",          pos:"TE",   school:"Oregon",        height:"6-3", weight:241, forty:"4.61", arm:"33", grade:90, myRank:10, espn:10, pff:10, pfsn:10, cbs:11, notes:"Versatile tight end with excellent athleticism, soft hands, and blocking capability." },
+  { id:11, name:"Mansoor Delane",        pos:"CB",   school:"LSU",           height:"6-0", weight:187, forty:"4.38", arm:"32", grade:89, myRank:11, espn:11, pff:12, pfsn:11, cbs:10, notes:"Lengthy corner with elite ball skills and aggressive press coverage technique." },
+  { id:12, name:"Rueben Bain Jr.",       pos:"EDGE", school:"Miami",         height:"6-2", weight:263, forty:"4.58", arm:"34", grade:89, myRank:12, espn:12, pff:11, pfsn:12, cbs:12, notes:"Powerful pass rusher with outstanding strength, relentless pursuit, and strong hands." },
+  { id:13, name:"Spencer Fano",          pos:"OT",   school:"Utah",          height:"6-6", weight:311, forty:"5.10", arm:"35", grade:89, myRank:13, espn:13, pff:13, pfsn:13, cbs:14, notes:"Quick and technically refined tackle with excellent pass-protection footwork." },
+  { id:14, name:"Olaivavega Ioane",      pos:"IOL",  school:"Penn State",    height:"6-4", weight:320, forty:"5.05", arm:"33", grade:88, myRank:14, espn:15, pff:14, pfsn:14, cbs:13, notes:"Anchor interior lineman with excellent power, football IQ, and versatility." },
+  { id:15, name:"Jordyn Tyson",          pos:"WR",   school:"Arizona State", height:"6-2", weight:203, forty:"4.41", arm:"32", grade:88, myRank:15, espn:14, pff:15, pfsn:15, cbs:15, notes:"Big-bodied receiver with elite athleticism and excellent contested-catch ability." },
+  { id:16, name:"Monroe Freeling",       pos:"OT",   school:"Georgia",       height:"6-7", weight:315, forty:"5.12", arm:"35", grade:87, myRank:16, espn:16, pff:16, pfsn:16, cbs:16, notes:"Imposing length and frame with the upside to be a franchise left tackle." },
+  { id:17, name:"Jermod McCoy",          pos:"CB",   school:"Tennessee",     height:"6-1", weight:188, forty:"4.42", arm:"32", grade:87, myRank:17, espn:17, pff:17, pfsn:17, cbs:18, notes:"Long corner with excellent technique, fluid hips, and ability to play press or zone." },
+  { id:18, name:"Denzel Boston",         pos:"WR",   school:"Washington",    height:"6-4", weight:212, forty:"4.44", arm:"33", grade:87, myRank:18, espn:18, pff:18, pfsn:18, cbs:17, notes:"Big-bodied target with excellent hands and a physical downfield presence." },
+  { id:19, name:"Caleb Lomu",            pos:"OT",   school:"Utah",          height:"6-6", weight:313, forty:"5.09", arm:"35", grade:86, myRank:19, espn:19, pff:19, pfsn:19, cbs:19, notes:"Powerful run blocker with strong hands, reliable technique, and starting upside." },
+  { id:20, name:"Peter Woods",           pos:"DT",   school:"Clemson",       height:"6-2", weight:298, forty:"4.85", arm:"33", grade:86, myRank:20, espn:20, pff:20, pfsn:20, cbs:20, notes:"Disruptive interior lineman with quickness, pass-rush ability, and high motor." },
+  { id:21, name:"Colton Hood",           pos:"CB",   school:"Tennessee",     height:"6-0", weight:193, forty:"4.44", arm:"31", grade:85, myRank:21, espn:21, pff:21, pfsn:21, cbs:22, notes:"Physical corner with excellent instincts and solid zone awareness." },
+  { id:22, name:"Kadyn Proctor",         pos:"OT",   school:"Alabama",       height:"6-7", weight:352, forty:"5.18", arm:"36", grade:85, myRank:22, espn:22, pff:22, pfsn:22, cbs:21, notes:"Massive frame with exceptional upside as a run blocker and anchor." },
+  { id:23, name:"Cashius Howell",        pos:"EDGE", school:"Texas A&M",     height:"6-2", weight:253, forty:"4.55", arm:"33", grade:84, myRank:23, espn:24, pff:23, pfsn:23, cbs:24, notes:"High-effort edge rusher with a developing pass-rush move set and good closing speed." },
+  { id:24, name:"Akheem Mesidor",        pos:"EDGE", school:"Miami",         height:"6-3", weight:259, forty:"4.57", arm:"34", grade:84, myRank:24, espn:23, pff:24, pfsn:24, cbs:23, notes:"Athletic edge with good bend, strong hands, and closing speed off the line." },
+  { id:25, name:"Blake Miller",          pos:"OT",   school:"Clemson",       height:"6-6", weight:312, forty:"5.11", arm:"34", grade:84, myRank:25, espn:25, pff:26, pfsn:25, cbs:25, notes:"Consistent and technically sound tackle with solid pass-protection skills." },
+  { id:26, name:"Caleb Banks",           pos:"DT",   school:"Florida",       height:"6-6", weight:327, forty:"4.98", arm:"35", grade:83, myRank:26, espn:27, pff:25, pfsn:26, cbs:27, notes:"Rare size with growing technique as a penetrating 3-technique." },
+  { id:27, name:"Garrett Nussmeier",     pos:"QB",   school:"LSU",           height:"6-2", weight:203, forty:"4.74", arm:"33", grade:83, myRank:27, espn:28, pff:28, pfsn:27, cbs:26, notes:"High-volume passer with a quick release, strong arm, and solid downfield accuracy." },
+  { id:28, name:"Omar Cooper Jr.",       pos:"WR",   school:"Indiana",       height:"6-0", weight:199, forty:"4.42", arm:"31", grade:83, myRank:28, espn:26, pff:27, pfsn:28, cbs:28, notes:"Speedy slot with excellent route running, crisp cuts, and strong YAC ability." },
+  { id:29, name:"KC Concepcion",         pos:"WR",   school:"Texas A&M",     height:"6-0", weight:196, forty:"4.41", arm:"31", grade:82, myRank:29, espn:29, pff:29, pfsn:29, cbs:30, notes:"Dynamic playmaker with elite agility, explosive quickness, and reliable hands." },
+  { id:30, name:"Avieon Terrell",        pos:"CB",   school:"Clemson",       height:"5-11",weight:186, forty:"4.40", arm:"30", grade:82, myRank:30, espn:30, pff:30, pfsn:30, cbs:29, notes:"Scrappy, competitive corner with outstanding ball production and press instincts." },
+  { id:31, name:"Eli Stowers",           pos:"TE",   school:"Vanderbilt",    height:"6-4", weight:239, forty:"4.63", arm:"33", grade:82, myRank:31, espn:32, pff:31, pfsn:31, cbs:32, notes:"Receiving tight end with excellent athleticism and soft hands at all levels." },
+  { id:32, name:"Anthony Hill Jr.",      pos:"LB",   school:"Texas",         height:"6-2", weight:238, forty:"4.53", arm:"32", grade:82, myRank:32, espn:31, pff:32, pfsn:32, cbs:31, notes:"Explosive linebacker with elite sack production and excellent coverage range." },
+  { id:33, name:"CJ Allen",             pos:"LB",   school:"Georgia",       height:"6-1", weight:230, forty:"4.55", arm:"32", grade:81, myRank:33, espn:33, pff:33, pfsn:33, cbs:34, notes:"Sideline-to-sideline linebacker with great instincts and physicality." },
+  { id:34, name:"Christen Miller",       pos:"DT",   school:"Georgia",       height:"6-4", weight:321, forty:"4.91", arm:"34", grade:81, myRank:34, espn:34, pff:35, pfsn:34, cbs:33, notes:"Massive interior lineman with strong hands and excellent run defense." },
+  { id:35, name:"Gabe Jacas",           pos:"EDGE", school:"Illinois",      height:"6-4", weight:260, forty:"4.63", arm:"34", grade:81, myRank:35, espn:35, pff:34, pfsn:35, cbs:36, notes:"Productive pass rusher with good initial quickness and relentless motor." },
+  { id:36, name:"Emmanuel Pregnon",      pos:"IOL",  school:"Oregon",        height:"6-4", weight:314, forty:"5.04", arm:"33", grade:80, myRank:36, espn:36, pff:36, pfsn:36, cbs:35, notes:"Smart interior lineman with excellent technique and positional versatility." },
+  { id:37, name:"Jadarian Price",        pos:"RB",   school:"Notre Dame",    height:"5-11",weight:203, forty:"4.42", arm:"30", grade:80, myRank:37, espn:37, pff:37, pfsn:37, cbs:37, notes:"Shifty runner with excellent vision, good hands, and reliable pass-catching ability." },
+  { id:38, name:"Keldric Faulk",         pos:"EDGE", school:"Auburn",        height:"6-6", weight:276, forty:"4.66", arm:"35", grade:80, myRank:38, espn:38, pff:39, pfsn:38, cbs:38, notes:"Long, freakish athlete still developing his pass-rush moves with first-round upside." },
+  { id:39, name:"Dillon Thieneman",      pos:"S",    school:"Oregon",        height:"6-0", weight:201, forty:"4.43", arm:"31", grade:80, myRank:39, espn:40, pff:38, pfsn:39, cbs:39, notes:"Big-play safety with excellent range, ball-hawking instincts, and reliable tackling." },
+  { id:40, name:"T.J. Parker",           pos:"EDGE", school:"Clemson",       height:"6-4", weight:263, forty:"4.61", arm:"34", grade:79, myRank:40, espn:39, pff:40, pfsn:40, cbs:40, notes:"Athletic edge rusher with versatile alignment, good bend, and solid rush skills." },
+  { id:41, name:"Kayden McDonald",       pos:"DT",   school:"Ohio State",    height:"6-2", weight:326, forty:"4.93", arm:"33", grade:79, myRank:41, espn:42, pff:41, pfsn:41, cbs:41, notes:"Stout interior lineman with excellent leverage, gap control, and run defense." },
+  { id:42, name:"Zachariah Branch",      pos:"WR",   school:"Georgia",       height:"5-10",weight:180, forty:"4.35", arm:"30", grade:79, myRank:42, espn:41, pff:43, pfsn:42, cbs:43, notes:"One of the fastest players in the class with elite return ability and separation." },
+  { id:43, name:"Max Klare",             pos:"TE",   school:"Ohio State",    height:"6-5", weight:251, forty:"4.58", arm:"33", grade:79, myRank:43, espn:43, pff:42, pfsn:43, cbs:42, notes:"Athletic tight end with reliable hands, route-running ability, and solid blocking." },
+  { id:44, name:"Carson Beck",           pos:"QB",   school:"Miami",         height:"6-4", weight:218, forty:"4.78", arm:"34", grade:78, myRank:44, espn:44, pff:44, pfsn:44, cbs:45, notes:"Former Georgia starter with a strong arm, improving accuracy, and quick release." },
+  { id:45, name:"Drew Allar",            pos:"QB",   school:"Penn State",    height:"6-5", weight:226, forty:"4.80", arm:"34", grade:78, myRank:45, espn:46, pff:46, pfsn:45, cbs:44, notes:"Big-bodied quarterback with excellent arm talent and natural pocket presence." },
+  { id:46, name:"Cade Klubnik",          pos:"QB",   school:"Clemson",       height:"6-1", weight:215, forty:"4.66", arm:"32", grade:78, myRank:46, espn:45, pff:45, pfsn:46, cbs:46, notes:"Mobile quarterback with strong accuracy, good escapability, and competitive spirit." },
+  { id:47, name:"Ty Simpson",            pos:"QB",   school:"Alabama",       height:"6-1", weight:211, forty:"4.68", arm:"32", grade:77, myRank:47, espn:48, pff:47, pfsn:47, cbs:48, notes:"Athletic QB with a solid arm and good mobility, improving as a pocket passer." },
+  { id:48, name:"Dante Moore",           pos:"QB",   school:"Oregon",        height:"6-3", weight:210, forty:"4.72", arm:"33", grade:77, myRank:48, espn:47, pff:48, pfsn:48, cbs:47, notes:"Big-armed passer with improved mechanics and a strong deep ball." },
+  { id:49, name:"Emmett Johnson",        pos:"RB",   school:"Nebraska",      height:"6-0", weight:215, forty:"4.40", arm:"30", grade:77, myRank:49, espn:49, pff:49, pfsn:49, cbs:50, notes:"Powerful runner with excellent vision, good hands, and reliable pass-blocking." },
+  { id:50, name:"Jonah Coleman",         pos:"RB",   school:"Washington",    height:"5-8", weight:220, forty:"4.33", arm:"30", grade:77, myRank:50, espn:50, pff:51, pfsn:50, cbs:49, notes:"Explosive runner with elite speed, great open-field vision, and elusiveness." },
+  { id:51, name:"Malik Muhammad",        pos:"CB",   school:"Texas",         height:"6-0", weight:188, forty:"4.43", arm:"31", grade:76, myRank:51, espn:51, pff:52, pfsn:51, cbs:52, notes:"Physical corner with excellent size, strong press technique, and ball skills." },
+  { id:52, name:"Chase Bisontis",        pos:"IOL",  school:"Texas A&M",     height:"6-4", weight:318, forty:"5.06", arm:"33", grade:76, myRank:52, espn:52, pff:50, pfsn:52, cbs:51, notes:"Powerful guard with excellent anchor strength and run-blocking capability." },
+  { id:53, name:"Connor Lew",            pos:"C",    school:"Auburn",        height:"6-3", weight:310, forty:"5.08", arm:"32", grade:76, myRank:53, espn:53, pff:53, pfsn:53, cbs:53, notes:"Smart, technically refined center with excellent communication and snap mechanics." },
+  { id:54, name:"Keyron Crawford",       pos:"EDGE", school:"Auburn",        height:"6-3", weight:248, forty:"4.58", arm:"33", grade:76, myRank:54, espn:55, pff:54, pfsn:54, cbs:54, notes:"Quick off the ball with a developing array of pass-rush moves and good burst." },
+  { id:55, name:"LT Overton",            pos:"DT",   school:"Alabama",       height:"6-3", weight:305, forty:"4.88", arm:"33", grade:75, myRank:55, espn:54, pff:55, pfsn:55, cbs:56, notes:"Disruptive interior lineman with excellent quickness, good leverage, and high motor." },
+  { id:56, name:"Tim Keenan III",        pos:"DT",   school:"Alabama",       height:"6-3", weight:320, forty:"4.95", arm:"33", grade:75, myRank:56, espn:56, pff:56, pfsn:56, cbs:55, notes:"Space-eating nose tackle with elite strength and excellent gap-filling ability." },
+  { id:57, name:"Malachi Fields",        pos:"WR",   school:"Notre Dame",    height:"6-4", weight:218, forty:"4.61", arm:"33", grade:75, myRank:57, espn:57, pff:58, pfsn:57, cbs:57, notes:"Big-bodied vertical threat with an impressive catch radius and physical style." },
+  { id:58, name:"Deion Burks",           pos:"WR",   school:"Oklahoma",      height:"6-1", weight:196, forty:"4.43", arm:"32", grade:75, myRank:58, espn:58, pff:57, pfsn:58, cbs:59, notes:"Fluid route runner with quick separation ability and reliable hands." },
+  { id:59, name:"Jalon Kilgore",         pos:"S",    school:"South Carolina",height:"6-1", weight:204, forty:"4.48", arm:"32", grade:75, myRank:59, espn:60, pff:59, pfsn:59, cbs:58, notes:"Physical box safety with excellent run support and solid coverage ability." },
+  { id:60, name:"Kyle Louis",            pos:"S",    school:"Pittsburgh",    height:"6-1", weight:200, forty:"4.46", arm:"32", grade:74, myRank:60, espn:59, pff:60, pfsn:60, cbs:61, notes:"Smart safety with elite instincts, good coverage range, and reliable tackling." },
+  { id:61, name:"Chandler Rivers",       pos:"CB",   school:"Duke",          height:"6-0", weight:190, forty:"4.44", arm:"31", grade:74, myRank:61, espn:61, pff:61, pfsn:61, cbs:60, notes:"Disciplined corner with excellent footwork, zone awareness, and good ball skills." },
+  { id:62, name:"Keith Abney II",        pos:"CB",   school:"Arizona State", height:"6-0", weight:192, forty:"4.45", arm:"31", grade:74, myRank:62, espn:62, pff:63, pfsn:62, cbs:62, notes:"Versatile corner with good size, solid ball skills, and physical play style." },
+  { id:63, name:"Jake Golday",           pos:"LB",   school:"Cincinnati",    height:"6-2", weight:228, forty:"4.56", arm:"32", grade:74, myRank:63, espn:64, pff:62, pfsn:63, cbs:64, notes:"Athletic linebacker with good instincts, solid coverage ability, and leadership." },
+  { id:64, name:"Germie Bernard",        pos:"WR",   school:"Alabama",       height:"6-0", weight:188, forty:"4.42", arm:"31", grade:73, myRank:64, espn:63, pff:64, pfsn:64, cbs:63, notes:"Crisp route runner with excellent hands and impressive yards after contact." },
+  { id:65, name:"Chris Bell",            pos:"WR",   school:"Louisville",    height:"6-2", weight:205, forty:"4.45", arm:"32", grade:73, myRank:65, espn:65, pff:65, pfsn:65, cbs:65, notes:"Physical receiver with good hands and strong run-after-catch ability." },
+  { id:66, name:"Antonio Williams",      pos:"WR",   school:"Clemson",       height:"6-1", weight:198, forty:"4.44", arm:"31", grade:73, myRank:66, espn:66, pff:66, pfsn:66, cbs:66, notes:"Explosive playmaker with elite acceleration and open-field quickness." },
+  { id:67, name:"Max Iheanachor",        pos:"OT",   school:"Arizona State", height:"6-6", weight:321, forty:"5.10", arm:"35", grade:73, myRank:67, espn:67, pff:67, pfsn:67, cbs:68, notes:"Long, athletic tackle with raw tools and legitimate first-round upside." },
+  { id:68, name:"D'Angelo Ponds",        pos:"CB",   school:"Indiana",       height:"5-9", weight:182, forty:"4.42", arm:"30", grade:73, myRank:68, espn:69, pff:68, pfsn:68, cbs:67, notes:"Feisty slot corner with competitive spirit, good quickness, and ball production." },
+  { id:69, name:"Romello Height",        pos:"EDGE", school:"Texas Tech",    height:"6-3", weight:239, forty:"4.60", arm:"33", grade:72, myRank:69, espn:68, pff:69, pfsn:69, cbs:70, notes:"Productive edge rusher with good burst, solid technique, and constant motor." },
+  { id:70, name:"Joshua Josephs",        pos:"EDGE", school:"Tennessee",     height:"6-3", weight:242, forty:"4.62", arm:"33", grade:72, myRank:70, espn:70, pff:71, pfsn:70, cbs:69, notes:"Versatile edge defender with solid run defense and developing rush skills." },
+  { id:71, name:"Emmanuel McNeil-Warren",pos:"S",    school:"Toledo",        height:"6-3", weight:201, forty:"4.45", arm:"33", grade:72, myRank:71, espn:72, pff:70, pfsn:71, cbs:72, notes:"Lengthy safety with excellent range, good instincts, and solid coverage ability." },
+  { id:72, name:"Logan Jones",           pos:"IOL",  school:"Iowa",          height:"6-4", weight:316, forty:"5.10", arm:"32", grade:72, myRank:72, espn:71, pff:72, pfsn:72, cbs:71, notes:"Fundamentally sound interior lineman with great anchor, footwork, and technique." },
+  { id:73, name:"Domonique Orange",      pos:"DT",   school:"Iowa State",    height:"6-2", weight:308, forty:"4.90", arm:"33", grade:71, myRank:73, espn:73, pff:73, pfsn:73, cbs:74, notes:"Quick interior lineman with excellent penetration ability and disruption upside." },
+  { id:74, name:"Darrell Jackson Jr.",   pos:"DT",   school:"Florida State", height:"6-3", weight:312, forty:"4.92", arm:"33", grade:71, myRank:74, espn:74, pff:74, pfsn:74, cbs:73, notes:"Powerful run stopper with good quickness, strong hands, and a high motor." },
+  { id:75, name:"Jack Endries",          pos:"TE",   school:"Texas",         height:"6-4", weight:242, forty:"4.66", arm:"33", grade:71, myRank:75, espn:75, pff:76, pfsn:75, cbs:75, notes:"Balanced tight end with above-average receiving ability and solid in-line blocking." },
+  { id:76, name:"Justin Joly",           pos:"TE",   school:"NC State",      height:"6-4", weight:245, forty:"4.64", arm:"33", grade:71, myRank:76, espn:76, pff:75, pfsn:76, cbs:77, notes:"Receiving tight end with excellent speed and soft hands in the middle of the field." },
+  { id:77, name:"Joe Royer",             pos:"TE",   school:"Cincinnati",    height:"6-5", weight:248, forty:"4.65", arm:"34", grade:70, myRank:77, espn:78, pff:77, pfsn:77, cbs:76, notes:"Big-bodied tight end with good hands, reliable blocking, and solid athleticism." },
+  { id:78, name:"Dallen Bentley",        pos:"TE",   school:"Utah",          height:"6-4", weight:242, forty:"4.62", arm:"33", grade:70, myRank:78, espn:77, pff:78, pfsn:78, cbs:78, notes:"Versatile tight end with good athleticism and run-after-catch ability." },
+  { id:79, name:"Jake Slaughter",        pos:"C",    school:"Florida",       height:"6-3", weight:306, forty:"5.07", arm:"32", grade:70, myRank:79, espn:79, pff:79, pfsn:79, cbs:80, notes:"Smart center with excellent snap mechanics, good communication, and solid blocking." },
+  { id:80, name:"Ahamad Moten Sr.",      pos:"DT",   school:"Miami",         height:"6-2", weight:310, forty:"4.88", arm:"33", grade:70, myRank:80, espn:80, pff:80, pfsn:80, cbs:79, notes:"Disruptive interior lineman with solid pass-rush burst and run-defense ability." },
+];
+
+// ── STATE ────────────────────────────────────────────────────────────
+let currentFilter = 'ALL';
+let selectedId = null;
+let activeDetailTab = 'detail';
+let dragSrcIdx = null;
+let aiHistory = [];
+
+// ── HELPERS ──────────────────────────────────────────────────────────
+function computeGrade(p) {
+  const ranks = [p.espn, p.pff, p.pfsn, p.cbs].filter(r => r > 0 && r < 999);
+  if (ranks.length === 0) return p.grade || 60;
+  const avg = ranks.reduce((a, b) => a + b, 0) / ranks.length;
+  if (avg <= 3)   return 98;
+  if (avg <= 6)   return 96;
+  if (avg <= 10)  return 94;
+  if (avg <= 16)  return 92;
+  if (avg <= 25)  return 89;
+  if (avg <= 35)  return 86;
+  if (avg <= 50)  return 83;
+  if (avg <= 75)  return 80;
+  if (avg <= 100) return 77;
+  if (avg <= 150) return 74;
+  if (avg <= 200) return 71;
+  if (avg <= 300) return 68;
+  if (avg <= 400) return 65;
+  return 62;
+}
+
+function getGradeColor(g) {
+  if (g >= 95) return '#d4a017';
+  if (g >= 90) return '#27ae60';
+  if (g >= 85) return '#3b82f6';
+  if (g >= 80) return '#8b5cf6';
+  return '#6b7280';
+}
+
+function getRankBadgeClass(rank) {
+  if (rank === 1) return 'rank-1';
+  if (rank === 2) return 'rank-2';
+  if (rank === 3) return 'rank-3';
+  return 'rank-other';
+}
+
+// ── BOARD ────────────────────────────────────────────────────────────
+function filterPos(pos, btn) {
+  currentFilter = pos;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderBoard();
+}
+
+function renderBoard() {
+  const query = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const filtered = PROSPECTS.filter(p =>
+    (currentFilter === 'ALL' || p.pos === currentFilter) &&
+    (!query || p.name.toLowerCase().includes(query) || p.school.toLowerCase().includes(query))
+  );
+  document.getElementById('prospect-count').textContent = `${filtered.length} / ${PROSPECTS.length} prospects`;
+
+  const list = document.getElementById('prospect-list');
+  list.innerHTML = '';
+  filtered.forEach(p => {
+    const displayRank = PROSPECTS.indexOf(p) + 1;
+    const row = document.createElement('div');
+    row.className = 'prospect-row' + (selectedId === p.id ? ' selected' : '');
+    row.draggable = true;
+    row.dataset.id = p.id;
+    row.dataset.origIdx = PROSPECTS.indexOf(p);
+
+    const avgRank = Math.round((p.espn + p.pff + p.pfsn + p.cbs) / 4);
+    const diff = avgRank - displayRank;
+    const diffStr = diff > 0 ? `<span style="color:var(--green);font-size:10px;">▲${diff}</span>` :
+                    diff < 0 ? `<span style="color:var(--red);font-size:10px;">▼${Math.abs(diff)}</span>` :
+                    `<span style="color:var(--muted);font-size:10px;">—</span>`;
+
+    row.innerHTML = `
+      <span class="drag-handle">⠿</span>
+      <div class="rank-badge ${getRankBadgeClass(displayRank)}">${displayRank}</div>
+      <span class="pos-badge pos-${p.pos}">${p.pos}</span>
+      <div class="prospect-info">
+        <div class="prospect-name">${p.name} ${diffStr}</div>
+        <div class="prospect-school">${p.school} · ${p.height} · ${p.weight > 0 ? p.weight + ' lbs' : '—'}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+        <div class="ranking-chips">
+          <span class="chip chip-espn">ESPN ${p.espn > 0 && p.espn < 999 ? p.espn : '—'}</span>
+          <span class="chip chip-pff">PFF ${p.pff > 0 && p.pff < 999 ? p.pff : '—'}</span>
+        </div>
+        <div class="ranking-chips">
+          <span class="chip chip-pfsn">PFSN ${p.pfsn > 0 && p.pfsn < 999 ? p.pfsn : '—'}</span>
+          <span class="chip chip-cbs">CBS ${p.cbs > 0 && p.cbs < 999 ? p.cbs : '—'}</span>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:${getGradeColor(computeGrade(p))}">${computeGrade(p)}</div>
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;">Grade</div>
+      </div>
+      <div class="actions">
+        <button class="row-btn row-btn-ai" onclick="event.stopPropagation();quickAI(${p.id})">AI</button>
+        <button class="row-btn row-btn-compare" onclick="event.stopPropagation();addToCompare(${p.id})">+CMP</button>
+      </div>
+    `;
+
+    row.addEventListener('click', () => selectProspect(p.id));
+    row.addEventListener('dragstart', onDragStart);
+    row.addEventListener('dragover', onDragOver);
+    row.addEventListener('drop', onDrop);
+    row.addEventListener('dragend', onDragEnd);
+    list.appendChild(row);
+  });
+}
+
+// ── DRAG & DROP ──────────────────────────────────────────────────────
+function onDragStart(e) {
+  dragSrcIdx = +e.currentTarget.dataset.origIdx;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDragOver(e) {
+  e.preventDefault();
+  document.querySelectorAll('.prospect-row').forEach(r => r.classList.remove('drag-over'));
+  e.currentTarget.classList.add('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault();
+  const destIdx = +e.currentTarget.dataset.origIdx;
+  if (dragSrcIdx === null || dragSrcIdx === destIdx) return;
+  const [moved] = PROSPECTS.splice(dragSrcIdx, 1);
+  PROSPECTS.splice(destIdx, 0, moved);
+  saveProspects();
+  renderBoard();
+  showToast(`${moved.name} moved to #${destIdx + 1}`);
+}
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.prospect-row').forEach(r => r.classList.remove('drag-over'));
+  dragSrcIdx = null;
+}
+
+function deduplicateProspects() {
+  const seen = new Set();
+  const before = PROSPECTS.length;
+  for (let i = PROSPECTS.length - 1; i >= 0; i--) {
+    const key = PROSPECTS[i].name.toLowerCase().trim();
+    if (seen.has(key)) PROSPECTS.splice(i, 1);
+    else seen.add(key);
+  }
+  const removed = before - PROSPECTS.length;
+  saveProspects();
+  renderBoard();
+  showToast(removed > 0 ? `🧹 Removed ${removed} duplicates · ${PROSPECTS.length} remaining` : 'No duplicates found');
+}
+
+let currentSort = 'my';
+
+function sortBoard(type, btn) {
+  currentSort = type;
+  document.querySelectorAll('[id^="sort-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (type === 'my') {
+    PROSPECTS.sort((a, b) => a.myRank - b.myRank);
+  } else if (type === 'grade') {
+    PROSPECTS.sort((a, b) => computeGrade(b) - computeGrade(a));
+  } else if (type === 'ras') {
+    PROSPECTS.sort((a, b) => (b.ras || 0) - (a.ras || 0));
+  } else {
+    PROSPECTS.sort((a, b) => (a[type] || 999) - (b[type] || 999));
+  }
+  saveProspects();
+  renderBoard();
+}
+
+function resetRankings() {
+  PROSPECTS.sort((a, b) => a.myRank - b.myRank);
+  saveProspects();
+  renderBoard();
+  showToast('Rankings reset to default');
+}
+
+// ── DETAIL ───────────────────────────────────────────────────────────
+function selectProspect(id) {
+  selectedId = id;
+  renderBoard();
+  renderDetail();
+}
+
+function renderDetail() {
+  if (!selectedId) return;
+  const p = PROSPECTS.find(x => x.id === selectedId);
+  if (!p) return;
+  if (activeDetailTab === 'detail') renderProspectProfile(p);
+  else renderAIPanel(p);
+}
+
+function renderProspectProfile(p) {
+  const rank = PROSPECTS.indexOf(p) + 1;
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-hero">
+      <div class="detail-pos">${p.pos} · #${rank} Overall</div>
+      <div class="detail-name">${p.name}</div>
+      <div class="detail-school">${p.school}</div>
+      <div style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px;">
+          <span>Composite Grade</span>
+          <span style="font-weight:700;color:${getGradeColor(computeGrade(p))}">${computeGrade(p)} / 100</span>
+        </div>
+        <div class="grade-bar-wrap">
+          <div class="grade-bar" style="width:${computeGrade(p)}%;background:${getGradeColor(computeGrade(p))}"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Measurables</div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Height</div><div class="stat-value">${p.height !== '—' ? p.height : '—'}</div></div>
+      <div class="stat-card"><div class="stat-label">Weight</div><div class="stat-value">${p.weight > 0 ? p.weight + ' lbs' : '—'}</div></div>
+      <div class="stat-card"><div class="stat-label">40-Yard Dash</div><div class="stat-value">${p.forty !== '—' ? p.forty + 's' : '—'}</div></div>
+      <div class="stat-card"><div class="stat-label">Arm Length</div><div class="stat-value">${p.arm !== '—' ? p.arm + '"' : '—'}</div></div>
+    </div>
+    <div class="section-title">Athleticism</div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${p.ras>0?'8px':'0'};">
+        <span style="font-size:12px;color:var(--muted);">RAS (Relative Athletic Score)</span>
+        <span style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:${p.ras>=9?'var(--gold)':p.ras>=7?'var(--green)':p.ras>=5?'var(--blue)':'var(--muted)'}">${p.ras>0?p.ras.toFixed(2):'—'}<span style="font-size:12px;color:var(--muted);"> / 10</span></span>
+      </div>
+      ${p.ras > 0 ? `
+      <div class="grade-bar-wrap">
+        <div class="grade-bar" style="width:${p.ras*10}%;background:${p.ras>=9?'var(--gold)':p.ras>=7?'var(--green)':p.ras>=5?'var(--blue)':'var(--muted)'}"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">${p.ras>=9?'Elite athlete':p.ras>=7?'Above average athlete':p.ras>=5?'Average athlete':'Below average athlete'}</div>
+      ` : '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Import RAS data to see score</div>'}
+    </div>
+
+
+    <div class="section-title">Expert Rankings</div>
+    <table class="rankings-table">
+      <tr><th>Source</th><th>Rank</th><th>vs. Mine</th></tr>
+      ${[['ESPN', p.espn], ['PFF', p.pff], ['PFSN', p.pfsn], ['CBS Sports', p.cbs]].map(([src, r]) => {
+        const diff = rank - r;
+        const diffStr = diff > 0 ? `<span style="color:var(--green)">+${diff}</span>` :
+                        diff < 0 ? `<span style="color:var(--red)">${diff}</span>` :
+                        `<span style="color:var(--muted)">=</span>`;
+        return `<tr><td class="source-name">${src}</td><td class="rank-num">#${r}</td><td>${diffStr}</td></tr>`;
+      }).join('')}
+    </table>
+
+    ${p.notes ? `
+    <div class="section-title">Scouting Note</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.65;background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border);margin-bottom:16px;">${p.notes}</div>
+    ` : ''}
+
+    <button class="btn btn-gold" style="width:100%;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🤖 Get AI Scouting Report</button>
+  `;
+}
+
+// ── AI ───────────────────────────────────────────────────────────────
+function renderAIPanel(p) {
+  const prompts = [
+    `What are ${p.name}'s biggest strengths?`,
+    `What are the red flags for ${p.name}?`,
+    `Which NFL team is the best fit for ${p.name}?`,
+    `Compare ${p.name} to a current NFL player`,
+    `What round should ${p.name} be drafted in?`,
+  ];
+  document.getElementById('detail-content').innerHTML = `
+    <div style="margin-bottom:14px;">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--gold);">${p ? p.name : 'AI Scout'}</div>
+      <div style="font-size:11px;color:var(--muted);">Ask anything about this prospect</div>
+    </div>
+    <div class="ai-label">Quick Questions</div>
+    <div class="ai-question-chips" style="margin-bottom:12px;">
+      ${prompts.map(q => `<div class="ai-chip" onclick="askAI('${q.replace(/'/g,"\\'")}', ${p ? p.id : 'null'})">${q}</div>`).join('')}
+    </div>
+    <div class="ai-label">Custom Question</div>
+    <div class="ai-input-row" style="margin-bottom:14px;">
+      <textarea class="ai-input" id="ai-custom-input" rows="2" placeholder="Ask anything about ${p ? p.name : 'this prospect'}..."></textarea>
+      <button class="btn btn-gold" onclick="submitCustomAI(${p ? p.id : 'null'})">Ask</button>
+    </div>
+    <div id="ai-chat-history"></div>
+  `;
+  renderAIHistory();
+}
+
+function renderAIHistory() {
+  const hist = document.getElementById('ai-chat-history');
+  if (!hist) return;
+  if (aiHistory.length === 0) {
+    hist.innerHTML = `<div class="empty-state"><p>Ask a question to get AI scouting analysis</p></div>`;
+    return;
+  }
+  hist.innerHTML = '<div class="ai-history">' +
+    aiHistory.map(m => `<div class="ai-msg ${m.role === 'user' ? 'ai-msg-user' : 'ai-msg-ai'}">${m.content}</div>`).join('') +
+  '</div>';
+  hist.scrollTop = hist.scrollHeight;
+}
+
+async function askAI(question, prospectId) {
+  const p = prospectId ? PROSPECTS.find(x => x.id === prospectId) : null;
+  aiHistory.push({ role: 'user', content: question });
+  renderAIHistory();
+
+  const prospectCtx = p ? `
+Prospect: ${p.name} | Position: ${p.pos} | School: ${p.school}
+Measurables: ${p.height}, ${p.weight}lbs, ${p.forty}s 40, ${p.arm}" arm
+Grade: ${p.grade}/100 | ESPN: #${p.espn} | PFF: #${p.pff} | PFSN: #${p.pfsn} | CBS: #${p.cbs}
+My board rank: #${PROSPECTS.indexOf(p)+1}
+Scouting notes: ${p.notes}` : '';
+
+  const systemPrompt = `You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements. Keep responses to 3-5 sentences unless more detail is needed.${prospectCtx ? '\n\nProspect Data:\n' + prospectCtx : ''}`;
+
+  const hist = document.getElementById('ai-chat-history');
+  if (hist) hist.innerHTML += `<div class="ai-history"><div class="ai-msg ai-msg-ai" style="color:var(--muted);font-style:italic;">Analyzing...</div></div>`;
+
+  if (!getApiKey()) {
+    aiHistory.push({ role: 'assistant', content: '⚠️ No API key set. Click the 🔑 API Key button in the header to add your Anthropic key.' });
+    renderAIHistory(); return;
+  }
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: question }],
+      }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      aiHistory.push({ role: 'assistant', content: `⚠️ API Error: ${data.error.message}` });
+    } else {
+      const answer = data.content?.[0]?.text || 'No response returned.';
+      aiHistory.push({ role: 'assistant', content: answer });
+    }
+  } catch (err) {
+    aiHistory.push({ role: 'assistant', content: `⚠️ ${err.message}` });
+  }
+  renderAIHistory();
+}
+
+function submitCustomAI(prospectId) {
+  const input = document.getElementById('ai-custom-input');
+  if (!input || !input.value.trim()) return;
+  askAI(input.value.trim(), prospectId);
+  input.value = '';
+}
+
+function quickAI(id) {
+  selectedId = id;
+  const p = PROSPECTS.find(x => x.id === id);
+  switchDetailTab('ai');
+  renderAIPanel(p);
+  askAI(`Give me a brief scouting summary for ${p.name} and his NFL draft outlook.`, id);
+}
+
+// ── COMPARE ──────────────────────────────────────────────────────────
+function populateCompareSelects() {
+  ['compare-a', 'compare-b'].forEach((selId, i) => {
+    const sel = document.getElementById(selId);
+    sel.innerHTML = PROSPECTS.map((p, idx) => `<option value="${idx}" ${idx === i ? 'selected' : ''}>${p.name} (${p.pos}, ${p.school})</option>`).join('');
+  });
+  renderCompare();
+}
+
+function addToCompare(id) {
+  const idx = PROSPECTS.findIndex(p => p.id === id);
+  document.getElementById('compare-a').value = idx;
+  renderCompare();
+  switchView('compare', document.querySelectorAll('.tab')[1]);
+  showToast(`${PROSPECTS[idx].name} added to comparison`);
+}
+
+function renderCompare() {
+  const idxA = +document.getElementById('compare-a').value;
+  const idxB = +document.getElementById('compare-b').value;
+  const a = PROSPECTS[idxA], b = PROSPECTS[idxB];
+  if (!a || !b) return;
+
+  const stats = [
+    { label:'Weight',         keyA:a.weight+' lbs',  keyB:b.weight+' lbs',  numA:a.weight,           numB:b.weight,           higher:true  },
+    { label:'40-Yard Dash',   keyA:a.forty+'s',       keyB:b.forty+'s',       numA:parseFloat(a.forty),numB:parseFloat(b.forty),higher:false },
+    { label:'Arm Length',     keyA:a.arm+'"',          keyB:b.arm+'"',          numA:parseInt(a.arm),   numB:parseInt(b.arm),   higher:true  },
+    { label:'Grade',          keyA:computeGrade(a),    keyB:computeGrade(b),    numA:computeGrade(a),    numB:computeGrade(b),    higher:true  },
+    { label:'ESPN Rank',      keyA:'#'+a.espn,         keyB:'#'+b.espn,         numA:a.espn,             numB:b.espn,             higher:false },
+    { label:'PFF Rank',       keyA:'#'+a.pff,          keyB:'#'+b.pff,          numA:a.pff,              numB:b.pff,              higher:false },
+    { label:'PFSN Rank',      keyA:'#'+a.pfsn,         keyB:'#'+b.pfsn,         numA:a.pfsn,             numB:b.pfsn,             higher:false },
+    { label:'CBS Rank',       keyA:'#'+a.cbs,          keyB:'#'+b.cbs,          numA:a.cbs,              numB:b.cbs,              higher:false },
+    { label:'My Board Rank',  keyA:'#'+(PROSPECTS.indexOf(a)+1), keyB:'#'+(PROSPECTS.indexOf(b)+1), numA:PROSPECTS.indexOf(a)+1, numB:PROSPECTS.indexOf(b)+1, higher:false },
+    { label:'RAS Score',      keyA:a.ras>0?a.ras.toFixed(2):'—', keyB:b.ras>0?b.ras.toFixed(2):'—', numA:a.ras||0, numB:b.ras||0, higher:true },
+    { label:'40-Yard Dash',   keyA:a.forty!=='—'?a.forty+'s':'—', keyB:b.forty!=='—'?b.forty+'s':'—', numA:parseFloat(a.forty)||0, numB:parseFloat(b.forty)||0, higher:false },
+  ];
+
+  document.getElementById('compare-output').innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:1fr 80px 1fr;background:var(--surface2);padding:16px 20px;border-bottom:1px solid var(--border);">
+        <div>
+          <span class="pos-badge pos-${a.pos}" style="margin-bottom:6px;display:inline-block;">${a.pos}</span>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1.5px;">${a.name}</div>
+          <div style="font-size:12px;color:var(--muted);">${a.school}</div>
+        </div>
+        <div style="text-align:center;color:var(--muted);font-size:18px;display:flex;align-items:center;justify-content:center;">VS</div>
+        <div style="text-align:right;">
+          <span class="pos-badge pos-${b.pos}" style="margin-bottom:6px;display:inline-block;">${b.pos}</span>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1.5px;">${b.name}</div>
+          <div style="font-size:12px;color:var(--muted);">${b.school}</div>
+        </div>
+      </div>
+      ${stats.map(s => {
+        let classA = '', classB = '';
+        if (s.numA && s.numB && s.numA !== s.numB) {
+          const aWins = s.higher ? s.numA > s.numB : s.numA < s.numB;
+          classA = aWins ? 'better' : 'worse';
+          classB = aWins ? 'worse' : 'better';
+        }
+        return `<div style="display:grid;grid-template-columns:1fr 100px 1fr;padding:10px 20px;border-bottom:1px solid var(--border);">
+          <div class="compare-val ${classA}">${s.keyA}</div>
+          <div style="text-align:center;font-size:11px;color:var(--muted);">${s.label}</div>
+          <div class="compare-val ${classB}" style="text-align:right;">${s.keyB}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+async function compareWithAI() {
+  const idxA = +document.getElementById('compare-a').value;
+  const idxB = +document.getElementById('compare-b').value;
+  const a = PROSPECTS[idxA], b = PROSPECTS[idxB];
+  const outEl = document.getElementById('compare-ai-output');
+  outEl.innerHTML = `<div style="color:var(--muted);font-style:italic;padding:12px;">Generating AI comparison...</div>`;
+
+  const question = `Compare ${a.name} (${a.pos}, ${a.school}, grade: ${a.grade}) vs ${b.name} (${b.pos}, ${b.school}, grade: ${b.grade}). Who would you take higher and why? Be specific. 4-6 sentences.`;
+
+  if (!getApiKey()) {
+    outEl.innerHTML = `<div style="color:var(--gold);padding:12px;">⚠️ No API key set. Click the 🔑 API Key button in the header.</div>`;
+    return;
+  }
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: 'You are a veteran NFL draft analyst. Give direct, specific, opinionated analysis using football terminology.',
+        messages: [{ role: 'user', content: question }],
+      }),
+    });
+    const data = await res.json();
+    if (data.error) {
+      outEl.innerHTML = `<div style="color:var(--red);padding:12px;">⚠️ API Error: ${data.error.message}</div>`;
+    } else {
+      const answer = data.content?.[0]?.text || 'Unable to generate comparison.';
+      outEl.innerHTML = `
+        <div style="background:var(--surface);border:1px solid var(--gold);border-radius:10px;padding:16px;">
+          <div style="font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">🤖 AI Draft Analyst Verdict</div>
+          <div style="font-size:14px;line-height:1.7;color:var(--text);">${answer}</div>
+        </div>`;
+    }
+  } catch (err) {
+    outEl.innerHTML = `<div style="color:var(--red);padding:12px;">⚠️ ${err.message}</div>`;
+  }
+}
+
+// ── VIEW SWITCHING ───────────────────────────────────────────────────
+function switchView(view, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const board = document.getElementById('board-panel');
+  const detail = document.getElementById('detail-panel');
+  const compare = document.getElementById('compare-view');
+  const main = document.querySelector('.main');
+
+  if (view === 'board') {
+    board.style.display = ''; detail.style.display = '';
+    compare.style.display = 'none'; main.style.display = '';
+  } else {
+    board.style.display = 'none'; detail.style.display = 'none';
+    compare.style.display = 'block'; main.style.display = 'none';
+    populateCompareSelects();
+  }
+}
+
+function switchDetailTab(tab) {
+  activeDetailTab = tab;
+  document.getElementById('tab-detail').classList.toggle('active', tab === 'detail');
+  document.getElementById('tab-ai').classList.toggle('active', tab === 'ai');
+  if (selectedId) {
+    const p = PROSPECTS.find(x => x.id === selectedId);
+    if (tab === 'detail') renderProspectProfile(p);
+    else renderAIPanel(p);
+  } else {
+    document.getElementById('detail-content').innerHTML = `<div class="empty-state"><div class="icon">🎯</div><p>Select a prospect first</p></div>`;
+  }
+}
+
+function openAITab() {
+  if (!selectedId) { showToast('Select a prospect first'); return; }
+  switchDetailTab('ai');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ── IMPORTER ─────────────────────────────────────────────────────────
+const IMP = {
+  step: 1, source: 'drafttek', rawText: '',
+  headers: [], rows: [], mapping: {}, importMode: 'merge', rankTarget: 'all',
+};
+
+const SOURCES = {
+  drafttek: {
+    label: 'DraftTek',
+    urls: [
+      'https://www.drafttek.com/2026-NFL-Draft-Big-Board/Top-NFL-Draft-Prospects-2026-Page-1.asp',
+      'https://www.drafttek.com/2026-NFL-Draft-Big-Board/Top-NFL-Draft-Prospects-2026-Page-2.asp',
+      'https://www.drafttek.com/2026-NFL-Draft-Big-Board/Top-NFL-Draft-Prospects-2026-Page-3.asp',
+      'https://www.drafttek.com/2026-NFL-Draft-Big-Board/Top-NFL-Draft-Prospects-2026-Page-4.asp',
+      'https://www.drafttek.com/2026-NFL-Draft-Big-Board/Top-NFL-Draft-Prospects-2026-Page-5.asp',
+    ],
+    instructions: [
+      'Open a DraftTek page link below',
+      'Click the rankings table, press <strong>Ctrl+A</strong> then <strong>Ctrl+C</strong>',
+      'Paste below — each page has 100 players (5 pages = 500 total)',
+      'Click <strong>+ Append Another Page</strong> between pages to accumulate rows',
+    ],
+  },
+  custom: {
+    label: 'Custom CSV',
+    urls: [],
+    instructions: [
+      'Paste any <strong>CSV or tab-separated</strong> data with a header row',
+      'Required: <strong>Name</strong> and <strong>Position</strong> columns',
+      'Optional: School, Height, Weight, 40-Yard, Arm, Grade, ESPN, PFF, PFSN, CBS, Notes',
+      'You will map columns manually in the next step',
+    ],
+  },
+};
+
+const COL_FIELDS = [
+  { key:'name',   label:'Player Name',   required:true  },
+  { key:'pos',    label:'Position',       required:true  },
+  { key:'school', label:'School/College', required:false },
+  { key:'rank',   label:'Rank (#)',       required:false },
+  { key:'height', label:'Height',         required:false },
+  { key:'weight', label:'Weight',         required:false },
+  { key:'forty',  label:'40-Yard Dash',   required:false },
+  { key:'arm',    label:'Arm Length',     required:false },
+  { key:'grade',  label:'Grade',          required:false },
+  { key:'espn',   label:'ESPN Rank',      required:false },
+  { key:'pff',    label:'PFF Rank',       required:false },
+  { key:'pfsn',   label:'PFSN Rank',      required:false },
+  { key:'cbs',    label:'CBS Rank',       required:false },
+  { key:'ras',    label:'RAS Score',      required:false },
+  { key:'notes',  label:'Notes/Bio',      required:false },
+];
+
+function autoDetectColumns(headers) {
+  const map = {};
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const patterns = {
+    name:   ['name','player','prospect','playername'],
+    pos:    ['pos','position','posgroup'],
+    school: ['school','college','team','university'],
+    rank:   ['rank','ovr','overall','rk','no'],
+    height: ['ht','height','hgt'],
+    weight: ['wt','weight','wgt','lbs'],
+    forty:  ['forty','40','40yard','40yd'],
+    arm:    ['arm','armlength'],
+    grade:  ['grade','score','rating'],
+    espn:   ['espn','espnrank','scoutsinc'],
+    pff:    ['pff','pffrank'],
+    pfsn:   ['pfsn','pfsnrank','nfln','nflnetwork'],
+    cbs:    ['cbs','cbsrank'],
+    ras:    ['ras','relativeathletic','athleticscore','rasscore'],
+    notes:  ['notes','bio','scouting','analysis','comment'],
+  };
+  headers.forEach((h, i) => {
+    const n = norm(h);
+    for (const [field, aliases] of Object.entries(patterns)) {
+      if (map[field] === undefined && aliases.some(a => n.includes(a) || a.includes(n))) {
+        map[field] = i;
+      }
+    }
+  });
+  return map;
+}
+
+function parseRawText(text) {
+  // Detect PFF format: lines of [number, name, position, optional grade]
+  const pffRows = parsePFFFormat(text);
+  if (pffRows) return pffRows;
+
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  if (lines.length < 2) return null;
+  const delim = (lines[0].match(/\t/g)||[]).length > (lines[0].match(/,/g)||[]).length ? '\t' : ',';
+  const headers = lines[0].split(delim).map(h => h.trim().replace(/^"|"$/g,''));
+  const rows = lines.slice(1).map(line => {
+    const cells = []; let cur = '', inQ = false;
+    for (const ch of line + delim) {
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === delim && !inQ) { cells.push(cur.trim()); cur = ''; }
+      else { cur += ch; }
+    }
+    return cells;
+  }).filter(r => r.some(c => c.trim()));
+  return { headers, rows };
+}
+
+function parsePFFFormat(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  const VALID_PFF_POS = new Set(['QB','HB','RB','WR','TE','T','G','C','OT','IOL','DI','DT','ED','EDGE','LB','CB','S','K','P']);
+  const rows = [];
+  let i = 0;
+  while (i < lines.length) {
+    const rankMatch = lines[i].match(/^(\d+)$/);
+    if (rankMatch && i + 2 < lines.length) {
+      const rank = rankMatch[1];
+      const name = lines[i + 1];
+      const pos  = lines[i + 2];
+      // Check if next line after pos looks like a grade (number) or another pos
+      const gradeCandidate = lines[i + 3] || '';
+      const isGrade = /^\d+\.\d+$/.test(gradeCandidate); // grades always have decimals (91.6), ranks don't
+      if (VALID_PFF_POS.has(pos.toUpperCase()) && name.length > 2 && name.length < 50) {
+        rows.push([rank, name, pos, isGrade ? gradeCandidate : '']);
+        i += isGrade ? 4 : 3;
+        continue;
+      }
+    }
+    i++;
+  }
+  if (rows.length < 5) return null;
+  return {
+    headers: ['Rank', 'Name', 'Position', 'Grade'],
+    rows,
+  };
+}
+
+function gradeFromRank(rank) {
+  const r = parseInt(rank) || 999;
+  if (r <= 5)   return 97; if (r <= 10)  return 95; if (r <= 20)  return 92;
+  if (r <= 32)  return 89; if (r <= 64)  return 85; if (r <= 100) return 81;
+  if (r <= 150) return 77; if (r <= 200) return 74; if (r <= 300) return 70;
+  if (r <= 400) return 66; return 62;
+}
+
+function normalizePos(raw) {
+  if (!raw) return 'N/A';
+  const p = raw.toUpperCase().trim();
+  const map = {
+    'QUARTERBACK':'QB','RUNNING BACK':'RB','HALFBACK':'RB','FULLBACK':'RB','FB':'RB',
+    'WIDE RECEIVER':'WR','TIGHT END':'TE',
+    'OFFENSIVE TACKLE':'OT','LEFT TACKLE':'OT','RIGHT TACKLE':'OT','OL':'OT',
+    'OFFENSIVE GUARD':'IOL','INTERIOR OFFENSIVE LINE':'IOL','OG':'IOL','GUARD':'IOL',
+    'CENTER':'C',
+    'DEFENSIVE TACKLE':'DT','NOSE TACKLE':'DT','NT':'DT','IDL':'DT',
+    'DEFENSIVE END':'EDGE','EDGE RUSHER':'EDGE','DE':'EDGE','ED':'EDGE',
+    'HB':'RB','T':'OT','G':'IOL','DI':'DT',
+    'LINEBACKER':'LB','INSIDE LINEBACKER':'LB','OUTSIDE LINEBACKER':'LB','ILB':'LB','OLB':'LB',
+    'CORNERBACK':'CB','CORNER':'CB',
+    'SAFETY':'S','FREE SAFETY':'S','STRONG SAFETY':'S','FS':'S','SS':'S',
+  };
+  return map[p] || p;
+}
+
+function rowsToProspects(rows, mapping) {
+  const get = (row, key) => {
+    const idx = mapping[key];
+    return (idx !== undefined && idx >= 0 && row[idx] !== undefined) ? row[idx].trim() : '';
+  };
+  let idCounter = PROSPECTS.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+  const VALID_POS = new Set(['QB','RB','WR','TE','OT','IOL','C','DT','EDGE','LB','CB','S','K','P','LS','OL','DL']);
+
+  return rows.map((row, i) => {
+    const name = get(row, 'name');
+    const rawPos = get(row, 'pos');
+    const normalPos = normalizePos(rawPos);
+    // Skip junk rows: no name, name looks like a sentence, or unrecognized position
+    if (!name || name.split(' ').length > 5 || !VALID_POS.has(normalPos)) return null;
+    const rankRaw = get(row, 'rank');
+    const rank = parseInt(rankRaw) || (i + 1);
+    const grade = parseInt(get(row, 'grade')) || gradeFromRank(rank);
+    const singleRank = IMP.source === 'drafttek' ? rank : null;
+    return {
+      id: idCounter++, name,
+      pos: normalPos,
+      school: get(row, 'school') || '—',
+      height: get(row, 'height') || '—',
+      weight: parseInt(get(row, 'weight')) || 0,
+      forty: get(row, 'forty') || '—',
+      arm: get(row, 'arm') || '—',
+      grade, myRank: rank,
+      espn:  parseInt(get(row, 'espn'))  || singleRank || rank,
+      pff:   parseInt(get(row, 'pff'))   || singleRank || rank,
+      pfsn:  parseInt(get(row, 'pfsn'))  || singleRank || rank,
+      cbs:   parseInt(get(row, 'cbs'))   || singleRank || rank,
+      ras:   parseFloat(get(row, 'ras')) || 0,
+      notes: get(row, 'notes') || '',
+    };
+  }).filter(Boolean);
+}
+
+function openImportModal() {
+  IMP.step = 1; IMP.rawText = ''; IMP.headers = []; IMP.rows = [];
+  IMP.mapping = {}; IMP.source = 'drafttek'; IMP.importMode = 'merge'; IMP.rankTarget = 'all';
+  document.getElementById('import-modal').style.display = 'flex';
+  renderImportStep();
+}
+function closeImportModal() {
+  document.getElementById('import-modal').style.display = 'none';
+}
+
+function setImportStep(n) {
+  IMP.step = n;
+  [1,2,3,4].forEach(i => {
+    const el = document.getElementById('imp-step-' + i);
+    el.className = 'step' + (i === n ? ' active' : i < n ? ' done' : '');
+  });
+  renderImportStep();
+}
+
+function renderImportStep() {
+  const body = document.getElementById('imp-body');
+  const footer = document.getElementById('imp-footer');
+
+  if (IMP.step === 1) {
+    body.innerHTML = `
+      <div style="margin-bottom:14px;font-size:13px;color:var(--muted);">Select your data source:</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+        ${Object.entries(SOURCES).map(([k,s]) => `
+          <button class="source-btn ${IMP.source===k?'active':''}" onclick="IMP.source='${k}';renderImportStep()">${s.label}</button>
+        `).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Which ranking does the rank column represent?</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+        ${[['all','All Sources (first import)'],['espn','ESPN'],['pff','PFF'],['pfsn','PFSN'],['cbs','CBS'],['combine','Combine / RAS']].map(([k,l])=>`
+          <button class="source-btn ${IMP.rankTarget===k?'active':''}" onclick="IMP.rankTarget='${k}';renderImportStep()">${l}</button>
+        `).join('')}
+      </div>
+      ${IMP.rankTarget === 'combine' ? `
+      <div style="background:#0d1625;border:1px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:#93c5fd;margin-bottom:16px;">
+        <strong>Combine / RAS mode:</strong> Updates height, weight, 40-yard dash, arm length, and RAS score for existing players by name match. Use this for ras.football or combine data imports.
+      </div>` : IMP.rankTarget !== 'all' ? `
+      <div style="background:#0d1625;border:1px solid var(--blue);border-radius:8px;padding:12px 14px;font-size:12px;color:#93c5fd;margin-bottom:16px;">
+        <strong>Multi-source mode:</strong> Only the <strong>${IMP.rankTarget.toUpperCase()}</strong> column will be updated.
+        Existing players get their ${IMP.rankTarget.toUpperCase()} rank updated by name match. New players are added with other sources set to unranked.
+      </div>` : `
+      <div style="background:#0a1a0a;border:1px solid var(--green);border-radius:8px;padding:12px 14px;font-size:12px;color:#6ee7b7;margin-bottom:16px;">
+        <strong>First import?</strong> Use <strong>All Sources</strong> to build your player list (e.g. from DraftTek). Then re-import with ESPN/PFF/PFSN/CBS selected to add accurate per-source rankings.
+      </div>`}
+      <div class="import-instructions">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">
+          How to get data from ${SOURCES[IMP.source].label}
+        </div>
+        <ol>${SOURCES[IMP.source].instructions.map(i => `<li>${i}</li>`).join('')}</ol>
+        ${SOURCES[IMP.source].urls.length ? `
+          <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;">
+            ${SOURCES[IMP.source].urls.map((url,i) => `
+              <a href="${url}" target="_blank" style="font-size:11px;color:var(--blue);text-decoration:none;background:var(--surface2);padding:4px 10px;border-radius:4px;border:1px solid var(--border);">
+                📄 Page ${i+1}
+              </a>`).join('')}
+          </div>` : ''}
+      </div>
+    `;
+    footer.innerHTML = `<button class="btn btn-gold" onclick="setImportStep(2)">Next: Paste Data →</button>`;
+  }
+
+  else if (IMP.step === 2) {
+    body.innerHTML = `
+      <div style="margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">
+          Paste copied table data below
+          ${IMP.rows.length ? `<span class="badge-new">${IMP.rows.length} rows loaded</span>` : ''}
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px);">
+          Tab-separated (copy from browser) or CSV. Header row required.
+        </div>
+        <textarea class="import-textarea" id="imp-paste-area"
+          placeholder="Paste your copied table here..."></textarea>
+      </div>
+      ${IMP.rows.length ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;">${IMP.rows.length} rows accumulated · paste more pages to add</div>` : ''}
+    `;
+    footer.innerHTML = `
+      <button class="btn btn-outline" onclick="setImportStep(1)">← Back</button>
+      <button class="btn btn-outline" onclick="appendPasteData()">+ Append Another Page</button>
+      <button class="btn btn-gold" onclick="parsePasteAndAdvance()">Next: Map Columns →</button>
+    `;
+  }
+
+  else if (IMP.step === 3) {
+    const options = ['— skip —', ...IMP.headers.map((h,i) => `${i}: ${h}`)];
+    body.innerHTML = `
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">Auto-detected from your headers — adjust as needed.</div>
+      <div class="col-map-grid">
+        ${COL_FIELDS.map(f => `
+          <div class="col-map-row">
+            <div class="col-map-label">${f.label}${f.required?' *':''}</div>
+            <select class="col-map-select" id="map-${f.key}" onchange="IMP.mapping['${f.key}']=this.value==='— skip —'?-1:parseInt(this.value)">
+              ${options.map((o,i) => {
+                const val = i===0 ? '— skip —' : i-1;
+                const detected = IMP.mapping[f.key];
+                const sel = (i===0&&(detected===undefined||detected===-1))||(i>0&&detected===i-1) ? 'selected' : '';
+                return `<option value="${val}" ${sel}>${o}</option>`;
+              }).join('')}
+            </select>
+          </div>`).join('')}
+      </div>
+      <div style="margin-top:16px;">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Preview (first 5 rows)</div>
+        <div style="overflow-x:auto;">
+          <table class="preview-table">
+            <tr>${COL_FIELDS.filter(f=>IMP.mapping[f.key]>=0).map(f=>`<th>${f.label}</th>`).join('')}</tr>
+            ${IMP.rows.slice(0,5).map(row=>`
+              <tr>${COL_FIELDS.filter(f=>IMP.mapping[f.key]>=0).map(f=>{
+                const v=row[IMP.mapping[f.key]]||'';
+                return `<td title="${v}">${v||'—'}</td>`;
+              }).join('')}</tr>`).join('')}
+          </table>
+        </div>
+      </div>
+    `;
+    footer.innerHTML = `
+      <button class="btn btn-outline" onclick="setImportStep(2)">← Back</button>
+      <button class="btn btn-gold" onclick="setImportStep(4)">Preview Import →</button>
+    `;
+  }
+
+  else if (IMP.step === 4) {
+    const incoming = rowsToProspects(IMP.rows, IMP.mapping);
+    const existing = new Set(PROSPECTS.map(p=>p.name.toLowerCase()));
+    const newOnes = incoming.filter(p=>!existing.has(p.name.toLowerCase()));
+    const dupes = incoming.length - newOnes.length;
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+        <div class="import-stat"><div class="big">${incoming.length}</div><div class="sub">In paste</div></div>
+        <div class="import-stat"><div class="big" style="color:var(--gold)">${newOnes.length}</div><div class="sub">New to board</div></div>
+        <div class="import-stat"><div class="big" style="color:var(--muted);font-size:32px;">${dupes}</div><div class="sub">Duplicates skipped</div></div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Import Mode</div>
+        <div style="display:flex;gap:8px;">
+          <button class="mode-btn ${IMP.importMode==='merge'?'active':''}" onclick="IMP.importMode='merge';renderImportStep()">Merge (add new, keep existing)</button>
+          <button class="mode-btn ${IMP.importMode==='replace'?'active':''}" onclick="IMP.importMode='replace';renderImportStep()">Replace All</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px;">
+          ${IMP.importMode==='merge'
+            ? `Adds <strong style="color:var(--green)">${newOnes.length}</strong> new prospects to your existing <strong>${PROSPECTS.length}</strong>.`
+            : `<strong style="color:var(--red)">Removes all ${PROSPECTS.length}</strong> current prospects and loads ${incoming.length} from this import.`}
+        </div>
+      </div>
+      ${newOnes.length ? `
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">First 5 new prospects</div>
+        <table class="preview-table">
+          <tr><th>#</th><th>Name</th><th>Pos</th><th>School</th><th>Grade</th></tr>
+          ${newOnes.slice(0,5).map(p=>`<tr><td>${p.myRank}</td><td>${p.name}</td><td>${p.pos}</td><td>${p.school}</td><td>${p.grade}</td></tr>`).join('')}
+        </table>` : `<div class="empty-state" style="padding:20px;"><p>All prospects already exist on your board.</p></div>`}
+    `;
+    footer.innerHTML = `
+      <button class="btn btn-outline" onclick="setImportStep(3)">← Back</button>
+      <button class="btn btn-red" onclick="confirmImport()">✓ Import ${IMP.importMode==='replace'?incoming.length:newOnes.length} Prospects</button>
+    `;
+  }
+}
+
+function parsePasteAndAdvance() {
+  const text = document.getElementById('imp-paste-area')?.value || '';
+  if (!text.trim()) { showToast('Paste some data first'); return; }
+  const parsed = parseRawText(text);
+  if (!parsed) { showToast('Could not parse — check format'); return; }
+  IMP.headers = parsed.headers;
+  IMP.rows = [...IMP.rows, ...parsed.rows];
+  IMP.mapping = autoDetectColumns(parsed.headers);
+  setImportStep(3);
+}
+
+function appendPasteData() {
+  const text = document.getElementById('imp-paste-area')?.value || '';
+  if (!text.trim()) { showToast('Nothing to append'); return; }
+  const parsed = parseRawText(text);
+  if (!parsed) { showToast('Could not parse'); return; }
+  IMP.rows = [...IMP.rows, ...parsed.rows];
+  document.getElementById('imp-paste-area').value = '';
+  showToast(`✓ Appended ${parsed.rows.length} rows · ${IMP.rows.length} total`);
+  renderImportStep();
+}
+
+function confirmImport() {
+  const incoming = rowsToProspects(IMP.rows, IMP.mapping);
+
+  if (IMP.importMode === 'replace') {
+    PROSPECTS.length = 0;
+    PROSPECTS.push(...incoming);
+    showToast(`✓ Imported ${incoming.length} prospects`);
+
+  } else if (IMP.rankTarget === 'combine') {
+    const existingMap = new Map(PROSPECTS.map(p => [p.name.toLowerCase(), p]));
+    let updated = 0, added = 0;
+    incoming.forEach(p => {
+      const match = existingMap.get(p.name.toLowerCase());
+      if (match) {
+        if (p.ras > 0)      match.ras    = p.ras;
+        if (p.forty !== '—') match.forty  = p.forty;
+        if (p.height !== '—') match.height = p.height;
+        if (p.weight > 0)   match.weight  = p.weight;
+        if (p.arm !== '—')  match.arm     = p.arm;
+        updated++;
+      } else {
+        PROSPECTS.push(p);
+        added++;
+      }
+    });
+    showToast(`✓ Combine data: updated ${updated}, added ${added} · ${PROSPECTS.length} total`);
+
+  } else if (IMP.rankTarget !== 'all') {
+    // Targeted: update one ranking field by name match, add new players with others unranked
+    const existingMap = new Map(PROSPECTS.map(p => [p.name.toLowerCase(), p]));
+    let updated = 0, added = 0;
+    incoming.forEach(p => {
+      const match = existingMap.get(p.name.toLowerCase());
+      if (match) {
+        match[IMP.rankTarget] = p[IMP.rankTarget];
+        updated++;
+      } else {
+        PROSPECTS.push({ ...p, espn: 999, pff: 999, pfsn: 999, cbs: 999, [IMP.rankTarget]: p[IMP.rankTarget] });
+        added++;
+      }
+    });
+    showToast(`✓ ${IMP.rankTarget.toUpperCase()}: updated ${updated}, added ${added} · ${PROSPECTS.length} total`);
+
+  } else {
+    const existing = new Set(PROSPECTS.map(p=>p.name.toLowerCase()));
+    const toAdd = incoming.filter(p=>!existing.has(p.name.toLowerCase()));
+    PROSPECTS.push(...toAdd);
+    showToast(`✓ Added ${toAdd.length} prospects · ${PROSPECTS.length} total`);
+  }
+
+  saveProspects();
+  closeImportModal();
+  renderBoard();
+}
+
+// ── API KEY ──────────────────────────────────────────────────────────
+function getApiKey() { return localStorage.getItem('anthropic_key') || ''; }
+function openKeyModal() {
+  document.getElementById('api-key-input').value = getApiKey();
+  document.getElementById('key-modal').style.display = 'flex';
+}
+function closeKeyModal() { document.getElementById('key-modal').style.display = 'none'; }
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { showToast('Enter a key first'); return; }
+  localStorage.setItem('anthropic_key', key);
+  document.getElementById('key-btn').style.borderColor = 'var(--green)';
+  document.getElementById('key-btn').style.color = 'var(--green)';
+  closeKeyModal();
+  showToast('✓ API key saved');
+}
+function clearApiKey() {
+  localStorage.removeItem('anthropic_key');
+  document.getElementById('api-key-input').value = '';
+  document.getElementById('key-btn').style.borderColor = '';
+  document.getElementById('key-btn').style.color = '';
+  showToast('Key cleared');
+}
+
+// ── PERSISTENCE ──────────────────────────────────────────────────────
+function saveProspects() {
+  try { localStorage.setItem('nfl_prospects', JSON.stringify(PROSPECTS)); } catch(e) {}
+}
+
+function loadProspects() {
+  try {
+    const saved = localStorage.getItem('nfl_prospects');
+    if (saved) {
+      const data = JSON.parse(saved);
+      if (Array.isArray(data) && data.length > 0) {
+        PROSPECTS.length = 0;
+        PROSPECTS.push(...data);
+      }
+    }
+  } catch(e) {}
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────
+loadProspects();
+renderBoard();
+</script>
+</body>
+</html>
