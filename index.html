@@ -2892,17 +2892,31 @@ async function summaryAskOtis() {
     return `Round ${pick.round}, Pick #${pick.pick}: ${p.name} (${p.pos}, ${p.school}) — Board rank #${boardRank}, Value score: ${score > 0 ? '+' : ''}${score}${fillsNeed ? ' [fills need]' : ''}`;
   }).join('\n');
 
-  const prompt = `You are analyzing the ${myMockTeam}'s 2026 NFL Draft class. Their top needs were: ${needs.join(', ')}.\n\nTheir picks:\n${picksText}\n\nThe draft grading formula has assigned this class a grade of ${grade.letter} (avg weighted value: ${avg > 0 ? '+' : ''}${avg.toFixed(1)}). Accept this grade — do not reassign a different letter grade. Explain why the class earned a ${grade.letter}, highlight the best pick, the worst pick, and how well they addressed their needs. Be direct and specific. 4-6 sentences.`;
+  const tradeCtx = buildTradeContext(myMockTeam);
+
+  const prompt = `You are analyzing the ${myMockTeam}'s 2026 NFL Draft class. Their top needs were: ${needs.join(', ')}.
+${tradeCtx ? '\nTrade activity:\n' + tradeCtx + '\n' : ''}
+Their picks:
+${picksText}
+
+The draft grading formula has assigned this class a grade of ${grade.letter} (avg weighted value: ${avg > 0 ? '+' : ''}${avg.toFixed(1)}). Accept this grade — do not reassign a different letter grade.
+
+Using your knowledge of the ${myMockTeam}'s current roster, key players, and head coach: explain why the class earned a ${grade.letter}, reference specific current players by name and how the new picks complement them, ${tradeCtx ? 'evaluate the trades made and whether they helped or hurt the class, ' : ''}highlight the best pick, the worst pick, and how well they addressed their needs. Be direct and specific. 4-6 sentences.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 400, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        system: 'You are an expert NFL draft analyst with deep knowledge of all 32 NFL teams — their current rosters, key players, head coaches, and offensive/defensive schemes. When analyzing a draft class, reference specific current players by name and explain how new picks complement or compete with them. Mention the head coach by name and relate picks to the team\'s scheme. Be direct, specific, and use football terminology.',
+        messages: [{ role: 'user', content: prompt }]
+      }),
     });
     const data = await res.json();
     const answer = data.error ? `⚠️ ${data.error.message}` : (data.content?.[0]?.text || 'No response.');
-    if (el) el.textContent = answer;
+    if (el) el.innerHTML = answer.replace(/\n/g, '<br>');
   } catch(err) {
     if (el) el.textContent = `⚠️ ${err.message}`;
   }
@@ -2976,6 +2990,40 @@ function renderReportCard() {
     </div>`;
 }
 
+function buildTradeContext(team) {
+  // Picks traded away (original team = this team, current owner ≠ this team)
+  const givenAway = MOCK_PICKS.filter(p => {
+    const orig = (TEAM_NAME_MAP[p.team.replace(/\s*\(via[^)]*\)/i,'').trim()] || p.team.replace(/\s*\(via[^)]*\)/i,'').trim());
+    return orig === team && p.owner && pickOwner(p) !== team;
+  });
+  // Picks received via trade (original team ≠ this team, current owner = this team)
+  const received = MOCK_PICKS.filter(p => {
+    const orig = (TEAM_NAME_MAP[p.team.replace(/\s*\(via[^)]*\)/i,'').trim()] || p.team.replace(/\s*\(via[^)]*\)/i,'').trim());
+    return orig !== team && p.owner && pickOwner(p) === team;
+  });
+  // Future picks traded away
+  const futureGiven = FUTURE_PICKS.filter(p => p.originalTeam === team && p.owner && p.owner !== team);
+  // Future picks received
+  const futureReceived = FUTURE_PICKS.filter(p => p.originalTeam !== team && p.owner === team);
+
+  const lines = [];
+  if (received.length || futureReceived.length) {
+    const picks = [
+      ...received.map(p => `#${p.pick} (Rd ${p.round}) from ${(TEAM_NAME_MAP[p.team.replace(/\s*\(via[^)]*\)/i,'').trim()] || p.team.replace(/\s*\(via[^)]*\)/i,'').trim())}`),
+      ...futureReceived.map(p => `${p.year} Rd ${p.round} from ${p.originalTeam}`)
+    ];
+    lines.push(`Picks acquired via trade: ${picks.join(', ')}`);
+  }
+  if (givenAway.length || futureGiven.length) {
+    const picks = [
+      ...givenAway.map(p => `#${p.pick} (Rd ${p.round}) to ${pickOwner(p)}`),
+      ...futureGiven.map(p => `${p.year} Rd ${p.round} to ${p.owner}`)
+    ];
+    lines.push(`Picks traded away: ${picks.join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
 async function gradeTeamWithOtis(team) {
   const elId = 'rc-otis-' + team.replace(/[^a-zA-Z]/g, '');
   const el = document.getElementById(elId);
@@ -3000,7 +3048,14 @@ async function gradeTeamWithOtis(team) {
   el.innerHTML = `<span style="color:var(--muted);font-style:italic;">Otis is grading...</span>`;
 
   const needsStr = needs.length ? `Team needs heading into the draft: ${needs.join(', ')}.` : '';
-  const question = `Grade the ${team}'s 2026 NFL Draft class. ${needsStr}\n\nHere are their picks (picks marked ✓ NEED address a team need):\n\n${pickSummary}\n\nGive an overall letter grade (A through F), comment on how well they addressed their needs, identify the best value pick and biggest reach, and summarize the class in 4-6 sentences.`;
+  const tradeCtx = buildTradeContext(team);
+  const question = `Grade the ${team}'s 2026 NFL Draft class. ${needsStr}
+${tradeCtx ? '\nTrade activity:\n' + tradeCtx + '\n' : ''}
+Here are their picks (picks marked ✓ NEED address a team need):
+
+${pickSummary}
+
+Using your knowledge of the ${team}'s current roster, key players, and head coach/scheme: give an overall letter grade (A through F), explain how these picks fit their existing personnel and scheme, ${tradeCtx ? 'evaluate the trades they made and whether the cost was worth it, ' : ''}comment on how well they addressed their needs, identify the best value pick and biggest reach, and summarize the class in 4-6 sentences.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -3008,8 +3063,8 @@ async function gradeTeamWithOtis(team) {
       headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 600,
-        system: 'You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements. Keep responses to 3-5 sentences unless more detail is needed.',
+        max_tokens: 700,
+        system: 'You are an expert NFL draft analyst with deep knowledge of all 32 NFL teams — their current rosters, key players, head coaches, and offensive/defensive schemes. When analyzing a draft class, reference specific current players by name and explain how new picks complement or compete with them. Mention the head coach by name and relate picks to the team\'s scheme. Be direct, specific, and use football terminology.',
         messages: [{ role: 'user', content: question }],
       }),
     });
