@@ -207,6 +207,7 @@
   .import-stat { background: var(--bg); border: 1px solid var(--green); border-radius: 8px; padding: 14px 16px; text-align: center; }
   .import-stat .big { font-family: 'Bebas Neue', sans-serif; font-size: 48px; color: var(--green); line-height: 1; }
   .import-stat .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .mode-toggle { display: flex; gap: 8px; margin-bottom: 8px; }
   .mode-btn { padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
   .mode-btn.active { border-color: var(--blue); color: var(--blue); background: #0d1625; }
   .badge-new { background: var(--green); color: #000; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
@@ -253,7 +254,7 @@
     <button class="btn btn-outline" onclick="openKeyModal()" id="key-btn">🔑 API Key</button>
     <button class="btn btn-outline" onclick="deduplicateProspects()">🧹 Dedupe</button>
     <button class="btn btn-outline" onclick="resetRankings()">Reset Order</button>
-    <button class="btn btn-gold" onclick="openAITab()">🤖 AI Analysis</button>
+    <button class="btn btn-gold" onclick="openAITab()">🤖 Ask Otis</button>
   </div>
 </header>
 
@@ -300,12 +301,12 @@
   <div class="detail-panel" id="detail-panel">
     <div class="detail-tabs">
       <div class="detail-tab active" id="tab-detail" onclick="switchDetailTab('detail')">Profile</div>
-      <div class="detail-tab" id="tab-ai" onclick="switchDetailTab('ai')">🤖 AI Scout</div>
+      <div class="detail-tab" id="tab-ai" onclick="switchDetailTab('ai')">🤖 Otis</div>
     </div>
     <div class="detail-content" id="detail-content">
       <div class="empty-state">
         <div class="icon">🎯</div>
-        <p>Click a prospect to see<br>their full profile and AI scouting report</p>
+        <p>Click a prospect to see<br>their full profile and Otis's scouting report</p>
       </div>
     </div>
   </div>
@@ -327,7 +328,7 @@
       <select class="compare-select" id="compare-b" style="font-size:14px;padding:10px;" onchange="renderCompare()"></select>
     </div>
     <div style="display:flex;align-items:flex-end;">
-      <button class="btn btn-gold" onclick="compareWithAI()">🤖 AI Verdict</button>
+      <button class="btn btn-gold" onclick="compareWithAI()">🤖 Otis's Verdict</button>
     </div>
   </div>
   <div id="compare-output"></div>
@@ -750,7 +751,7 @@ function renderProspectProfile(p) {
     <div style="display:flex;gap:8px;margin-top:4px;">
       <button class="btn btn-outline" style="flex:1;" onclick="openEditModal(${selectedId})">✏️ Edit</button>
       <button class="btn btn-red" style="flex:1;" onclick="deleteProspect(${selectedId})">🗑 Delete</button>
-      <button class="btn btn-gold" style="flex:2;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🤖 AI Report</button>
+      <button class="btn btn-gold" style="flex:2;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🤖 Ask Otis</button>
     </div>
   `;
 }
@@ -766,8 +767,8 @@ function renderAIPanel(p) {
   ];
   document.getElementById('detail-content').innerHTML = `
     <div style="margin-bottom:14px;">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--gold);">${p ? p.name : 'AI Scout'}</div>
-      <div style="font-size:11px;color:var(--muted);">Ask anything about this prospect</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--gold);">${p ? p.name : 'Otis'}</div>
+      <div style="font-size:11px;color:var(--muted);">Ask Otis anything about this prospect</div>
     </div>
     <div class="ai-label">Quick Questions</div>
     <div class="ai-question-chips" style="margin-bottom:12px;">
@@ -787,7 +788,7 @@ function renderAIHistory() {
   const hist = document.getElementById('ai-chat-history');
   if (!hist) return;
   if (aiHistory.length === 0) {
-    hist.innerHTML = `<div class="empty-state"><p>Ask a question to get AI scouting analysis</p></div>`;
+    hist.innerHTML = `<div class="empty-state"><p>Ask Otis a question to get scouting analysis</p></div>`;
     return;
   }
   hist.innerHTML = '<div class="ai-history">' +
@@ -890,7 +891,7 @@ function renderCompare() {
     { label:'CBS Rank',       keyA:'#'+a.cbs,          keyB:'#'+b.cbs,          numA:a.cbs,              numB:b.cbs,              higher:false },
     { label:'My Board Rank',  keyA:'#'+(PROSPECTS.indexOf(a)+1), keyB:'#'+(PROSPECTS.indexOf(b)+1), numA:PROSPECTS.indexOf(a)+1, numB:PROSPECTS.indexOf(b)+1, higher:false },
     { label:'RAS Score',      keyA:a.ras>0?a.ras.toFixed(2):'—', keyB:b.ras>0?b.ras.toFixed(2):'—', numA:a.ras||0, numB:b.ras||0, higher:true },
-    { label:'40-Yard Dash',   keyA:a.forty!=='—'?a.forty+'s':'—', keyB:b.forty!=='—'?b.forty+'s':'—', numA:parseFloat(a.forty)||0, numB:parseFloat(b.forty)||0, higher:false },
+    { label:'Arm Length',     keyA:a.arm!=='—'?a.arm+'"':'—',    keyB:b.arm!=='—'?b.arm+'"':'—',    numA:parseFloat(a.arm)||0,   numB:parseFloat(b.arm)||0,   higher:true },
   ];
 
   document.getElementById('compare-output').innerHTML = `
@@ -945,7 +946,7 @@ async function compareWithAI() {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1000,
-        system: 'You are a veteran NFL draft analyst. Give direct, specific, opinionated analysis using football terminology.',
+        system: 'You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements.',
         messages: [{ role: 'user', content: question }],
       }),
     });
@@ -956,7 +957,7 @@ async function compareWithAI() {
       const answer = data.content?.[0]?.text || 'Unable to generate comparison.';
       outEl.innerHTML = `
         <div style="background:var(--surface);border:1px solid var(--gold);border-radius:10px;padding:16px;">
-          <div style="font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">🤖 AI Draft Analyst Verdict</div>
+          <div style="font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">🤖 Otis's Verdict</div>
           <div style="font-size:14px;line-height:1.7;color:var(--text);">${answer}</div>
         </div>`;
     }
