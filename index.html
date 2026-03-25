@@ -2621,15 +2621,20 @@ async function summaryAskOtis() {
   if (el) el.textContent = 'Analyzing your draft class...';
   if (!getApiKey()) { if (el) el.textContent = '⚠️ No API key set.'; return; }
 
+  const scores = myPicks.map(valueScore).filter(v => v !== null);
+  const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+  const grade = gradeFromValue(avg);
+
   const picksText = myPicks.map(pick => {
     const p = PROSPECTS.find(x => x.id === pick.playerId);
     if (!p) return '';
     const boardRank = PROSPECTS.indexOf(p) + 1;
     const score = valueScore(pick);
-    return `Round ${pick.round}, Pick #${pick.pick}: ${p.name} (${p.pos}, ${p.school}) — Board rank #${boardRank}, Value score: ${score > 0 ? '+' : ''}${score}`;
+    const fillsNeed = needs.includes(p.pos);
+    return `Round ${pick.round}, Pick #${pick.pick}: ${p.name} (${p.pos}, ${p.school}) — Board rank #${boardRank}, Value score: ${score > 0 ? '+' : ''}${score}${fillsNeed ? ' [fills need]' : ''}`;
   }).join('\n');
 
-  const prompt = `You are grading the ${myMockTeam}'s 2026 NFL Draft class. Their top needs were: ${needs.join(', ')}.\n\nTheir picks:\n${picksText}\n\nGive an overall grade, highlight the best pick, worst pick, and whether they addressed their needs. Be direct and specific. 4-6 sentences.`;
+  const prompt = `You are analyzing the ${myMockTeam}'s 2026 NFL Draft class. Their top needs were: ${needs.join(', ')}.\n\nTheir picks:\n${picksText}\n\nThe draft grading formula has assigned this class a grade of ${grade.letter} (avg weighted value: ${avg > 0 ? '+' : ''}${avg.toFixed(1)}). Accept this grade — do not reassign a different letter grade. Explain why the class earned a ${grade.letter}, highlight the best pick, the worst pick, and how well they addressed their needs. Be direct and specific. 4-6 sentences.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
