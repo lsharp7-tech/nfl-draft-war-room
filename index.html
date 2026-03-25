@@ -212,6 +212,28 @@
   .badge-new { background: var(--green); color: #000; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
 
   .board-panel, .detail-content { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+  /* MOCK DRAFT */
+  .mock-layout { display:flex; gap:0; height:calc(100vh - 120px); width:100%; }
+  .mock-picks-panel { width:360px; border-right:1px solid var(--border); overflow-y:auto; flex-shrink:0; }
+  .mock-board-panel { flex:1; overflow-y:auto; padding:16px; }
+  .mock-round-header { font-family:'Bebas Neue',sans-serif; font-size:16px; letter-spacing:2px; color:var(--gold); padding:10px 16px 6px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface); z-index:1; }
+  .mock-pick-row { display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; }
+  .mock-pick-row:hover { background:var(--surface2); }
+  .mock-pick-row.selected { background:#1a1400; border-left:3px solid var(--gold); }
+  .mock-pick-row.filled { opacity:0.7; }
+  .mock-pick-num { font-family:'DM Mono',monospace; font-size:12px; color:var(--muted); width:28px; flex-shrink:0; }
+  .mock-team { font-size:12px; font-weight:600; color:var(--text); flex:1; }
+  .mock-player-name { font-size:11px; color:var(--gold); font-weight:600; }
+  .mock-player-pos { font-size:10px; color:var(--muted); }
+  .mock-empty { font-size:11px; color:var(--border); font-style:italic; }
+  .mock-remove { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; padding:0 2px; opacity:0; transition:opacity 0.15s; }
+  .mock-pick-row:hover .mock-remove { opacity:1; }
+  .drafted-badge { font-size:9px; font-weight:700; background:var(--gold); color:#000; border-radius:3px; padding:1px 5px; margin-left:6px; vertical-align:middle; }
+  .mock-avail-row { display:flex; align-items:center; gap:10px; padding:8px 10px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 0.15s; border-radius:4px; }
+  .mock-avail-row:hover { background:var(--surface2); }
+  .mock-avail-row.drafted-out { opacity:0.3; pointer-events:none; }
+  .mock-hint { font-size:12px; color:var(--muted); padding:12px 16px; font-style:italic; }
 </style>
 </head>
 <body>
@@ -227,6 +249,7 @@
   <div class="header-actions">
     <span id="prospect-count" style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
     <button class="btn btn-outline" onclick="openImportModal()">⬆ Import Players</button>
+    <button class="btn btn-outline" onclick="exportCSV()">⬇ Export CSV</button>
     <button class="btn btn-outline" onclick="openKeyModal()" id="key-btn">🔑 API Key</button>
     <button class="btn btn-outline" onclick="deduplicateProspects()">🧹 Dedupe</button>
     <button class="btn btn-outline" onclick="resetRankings()">Reset Order</button>
@@ -237,6 +260,7 @@
 <div class="tabs">
   <div class="tab active" onclick="switchView('board',this)">📋 My Big Board</div>
   <div class="tab" onclick="switchView('compare',this)">⚖️ Compare</div>
+  <div class="tab" onclick="switchView('mock',this)">🏟 Mock Draft</div>
 </div>
 
 <div class="main">
@@ -308,6 +332,23 @@
   </div>
   <div id="compare-output"></div>
   <div id="compare-ai-output" style="margin-top:16px;"></div>
+</div>
+
+<!-- MOCK DRAFT VIEW -->
+<div id="mock-draft-view" style="display:none; width:100%;">
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid var(--border);">
+    <div style="display:flex; align-items:center; gap:16px;">
+      <h2 style="font-family:'Bebas Neue',sans-serif;letter-spacing:2px;color:var(--gold);font-size:22px;">2026 MOCK DRAFT</h2>
+      <span id="mock-pick-hint" style="font-size:12px;color:var(--muted);">Select a pick, then click a player to assign</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
+    </div>
+  </div>
+  <div class="mock-layout">
+    <div class="mock-picks-panel" id="mock-picks-panel"></div>
+    <div class="mock-board-panel" id="mock-board-panel"></div>
+  </div>
 </div>
 
 <!-- API KEY MODAL -->
@@ -536,7 +577,7 @@ function renderBoard() {
       <div class="rank-badge ${getRankBadgeClass(displayRank)}">${displayRank}</div>
       <span class="pos-badge pos-${p.pos}">${p.pos}</span>
       <div class="prospect-info">
-        <div class="prospect-name">${p.name} ${diffStr} ${p.ras > 0 ? `<span style="font-size:9px;font-weight:700;background:${p.ras>=9?'var(--gold)':p.ras>=7?'var(--green)':p.ras>=5?'var(--blue)':'#555'};color:${p.ras>=9?'#000':'#fff'};border-radius:4px;padding:1px 5px;vertical-align:middle;letter-spacing:0.3px;">RAS ${p.ras.toFixed(1)}</span>` : ''}</div>
+        <div class="prospect-name">${p.name} ${diffStr} ${p.ras > 0 ? `<span style="font-size:9px;font-weight:700;background:${p.ras>=9?'var(--gold)':p.ras>=7?'var(--green)':p.ras>=5?'var(--blue)':'#555'};color:${p.ras>=9?'#000':'#fff'};border-radius:4px;padding:1px 5px;vertical-align:middle;letter-spacing:0.3px;">RAS ${p.ras.toFixed(1)}</span>` : ''}${getMockDraftBadge(p.id)}</div>
         <div class="prospect-school">${p.school} · ${p.height} · ${p.weight > 0 ? p.weight + ' lbs' : '—'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
@@ -933,15 +974,22 @@ function switchView(view, btn) {
   const board = document.getElementById('board-panel');
   const detail = document.getElementById('detail-panel');
   const compare = document.getElementById('compare-view');
+  const mock = document.getElementById('mock-draft-view');
   const main = document.querySelector('.main');
+
+  board.style.display = 'none'; detail.style.display = 'none';
+  compare.style.display = 'none'; mock.style.display = 'none';
+  main.style.display = 'none';
 
   if (view === 'board') {
     board.style.display = ''; detail.style.display = '';
-    compare.style.display = 'none'; main.style.display = '';
-  } else {
-    board.style.display = 'none'; detail.style.display = 'none';
-    compare.style.display = 'block'; main.style.display = 'none';
+    main.style.display = '';
+  } else if (view === 'compare') {
+    compare.style.display = 'block';
     populateCompareSelects();
+  } else if (view === 'mock') {
+    mock.style.display = 'block';
+    renderMockDraft();
   }
 }
 
@@ -1197,7 +1245,12 @@ function openEditModal(id) {
     field('Weight (lbs)', 'weight', p.weight || '') +
     field('40-Yard Dash', 'forty', p.forty) +
     field('Arm Length', 'arm', p.arm) +
-    field('RAS Score', 'ras', p.ras || '');
+    field('RAS Score', 'ras', p.ras || '') +
+    `<div style="grid-column:1/-1;">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Scouting Notes</div>
+      <textarea data-key="notes" rows="3" placeholder="Your scouting notes..."
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;">${p.notes || ''}</textarea>
+    </div>`;
   document.getElementById('edit-modal').dataset.editId = id;
   document.getElementById('edit-modal').style.display = 'flex';
 }
@@ -1213,6 +1266,7 @@ function saveProspectEdit() {
     const val = input.value.trim();
     if (key === 'weight') p.weight = parseInt(val) || 0;
     else if (key === 'ras') p.ras = parseFloat(val) || 0;
+    else if (key === 'notes') p.notes = val;
     else p[key] = val || '—';
   });
   saveProspects();
@@ -1512,6 +1566,166 @@ function clearApiKey() {
   showToast('Key cleared');
 }
 
+// ── EXPORT CSV ───────────────────────────────────────────────────────
+function exportCSV() {
+  const headers = ['Rank','Name','Pos','School','Height','Weight','40 Dash','Arm','RAS','Grade','ESPN','PFF','PFSN','CBS','Notes'];
+  const rows = PROSPECTS.map((p, i) => [
+    i+1, p.name, p.pos, p.school, p.height,
+    p.weight || '', p.forty, p.arm,
+    p.ras > 0 ? p.ras.toFixed(2) : '',
+    computeGrade(p), p.espn < 999 ? p.espn : '', p.pff < 999 ? p.pff : '',
+    p.pfsn < 999 ? p.pfsn : '', p.cbs < 999 ? p.cbs : '',
+    (p.notes || '').replace(/,/g, ';')
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'nfl-draft-2026-bigboard.csv';
+  a.click();
+  showToast('✓ Board exported to CSV');
+}
+
+// ── MOCK DRAFT ────────────────────────────────────────────────────────
+const ROUND1_TEAMS = [
+  'Cleveland Browns','Tennessee Titans','Jacksonville Jaguars','Las Vegas Raiders',
+  'New York Giants','Carolina Panthers','New Orleans Saints','New York Jets',
+  'Chicago Bears','Pittsburgh Steelers','Atlanta Falcons','Indianapolis Colts',
+  'Seattle Seahawks','Dallas Cowboys','Miami Dolphins','Green Bay Packers',
+  'Arizona Cardinals','Tampa Bay Buccaneers','Cincinnati Bengals','Denver Broncos',
+  'New England Patriots','Los Angeles Chargers','Houston Texans','Washington Commanders',
+  'Baltimore Ravens','San Francisco 49ers','Buffalo Bills','Los Angeles Rams',
+  'Minnesota Vikings','Kansas City Chiefs','Detroit Lions','Philadelphia Eagles'
+];
+
+// Generate all 7 rounds of picks
+const MOCK_PICKS = [];
+for (let round = 1; round <= 7; round++) {
+  ROUND1_TEAMS.forEach((team, i) => {
+    MOCK_PICKS.push({ pick: (round-1)*32 + i + 1, round, team, playerId: null });
+  });
+}
+
+let selectedMockPick = null;
+
+function saveMockDraft() {
+  try { localStorage.setItem('nfl_mock_draft', JSON.stringify(MOCK_PICKS.map(p => p.playerId))); } catch(e) {}
+}
+function loadMockDraft() {
+  try {
+    const saved = localStorage.getItem('nfl_mock_draft');
+    if (saved) {
+      const ids = JSON.parse(saved);
+      ids.forEach((id, i) => { if (MOCK_PICKS[i]) MOCK_PICKS[i].playerId = id; });
+    }
+  } catch(e) {}
+}
+
+function getMockDraftBadge(playerId) {
+  const pick = MOCK_PICKS.find(p => p.playerId === playerId);
+  if (!pick) return '';
+  return `<span class="drafted-badge">R${pick.round} · #${pick.pick} ${pick.team}</span>`;
+}
+
+function resetMockDraft() {
+  if (!confirm('Clear all mock draft picks?')) return;
+  MOCK_PICKS.forEach(p => p.playerId = null);
+  selectedMockPick = null;
+  saveMockDraft();
+  renderMockDraft();
+  renderBoard();
+  showToast('Mock draft reset');
+}
+
+function renderMockDraft() {
+  renderMockPicks();
+  renderMockBoard();
+}
+
+function renderMockPicks() {
+  const panel = document.getElementById('mock-picks-panel');
+  if (!panel) return;
+  let html = '';
+  let lastRound = 0;
+  MOCK_PICKS.forEach(pick => {
+    if (pick.round !== lastRound) {
+      html += `<div class="mock-round-header">Round ${pick.round}</div>`;
+      lastRound = pick.round;
+    }
+    const p = pick.playerId ? PROSPECTS.find(x => x.id === pick.playerId) : null;
+    const isSelected = selectedMockPick === pick.pick;
+    html += `<div class="mock-pick-row ${isSelected ? 'selected' : ''} ${p ? 'filled' : ''}" onclick="selectMockPick(${pick.pick})">
+      <span class="mock-pick-num">${pick.pick}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="mock-team">${pick.team}</div>
+        ${p
+          ? `<div class="mock-player-name">${p.name} <span class="mock-player-pos">${p.pos}</span></div>`
+          : `<div class="mock-empty">— No selection —</div>`}
+      </div>
+      ${p ? `<button class="mock-remove" onclick="event.stopPropagation();removeMockPick(${pick.pick})" title="Remove">✕</button>` : ''}
+    </div>`;
+  });
+  panel.innerHTML = html;
+  // Scroll selected pick into view
+  const sel = panel.querySelector('.mock-pick-row.selected');
+  if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+
+function renderMockBoard() {
+  const panel = document.getElementById('mock-board-panel');
+  if (!panel) return;
+  const draftedIds = new Set(MOCK_PICKS.filter(p => p.playerId).map(p => p.playerId));
+  const pick = MOCK_PICKS.find(p => p.pick === selectedMockPick);
+
+  let hint = '';
+  if (!selectedMockPick) {
+    hint = `<div class="mock-hint">← Select a pick on the left to assign a player</div>`;
+  } else {
+    hint = `<div class="mock-hint" style="color:var(--gold);">Assigning: Pick #${selectedMockPick} · ${pick?.team} — click a player below</div>`;
+  }
+
+  const rows = PROSPECTS.map(p => {
+    const drafted = draftedIds.has(p.id);
+    return `<div class="mock-avail-row ${drafted ? 'drafted-out' : ''}" onclick="assignMockPick(${p.id})">
+      <span class="pos-badge pos-${p.pos}" style="font-size:10px;padding:2px 6px;">${p.pos}</span>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;color:${drafted?'var(--muted)':'var(--text)'};">${p.name}</div>
+        <div style="font-size:11px;color:var(--muted);">${p.school}</div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:12px;color:${getGradeColor(computeGrade(p))}">${computeGrade(p)}</div>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = hint + rows;
+}
+
+function selectMockPick(pickNum) {
+  selectedMockPick = selectedMockPick === pickNum ? null : pickNum;
+  renderMockDraft();
+}
+
+function assignMockPick(playerId) {
+  if (!selectedMockPick) { showToast('Select a pick first'); return; }
+  const pick = MOCK_PICKS.find(p => p.pick === selectedMockPick);
+  if (!pick) return;
+  // If player already drafted elsewhere, remove that assignment
+  MOCK_PICKS.forEach(p => { if (p.playerId === playerId) p.playerId = null; });
+  pick.playerId = playerId;
+  // Auto-advance to next empty pick
+  const nextEmpty = MOCK_PICKS.find(p => !p.playerId && p.pick > selectedMockPick);
+  selectedMockPick = nextEmpty ? nextEmpty.pick : null;
+  saveMockDraft();
+  renderMockDraft();
+  renderBoard();
+}
+
+function removeMockPick(pickNum) {
+  const pick = MOCK_PICKS.find(p => p.pick === pickNum);
+  if (pick) pick.playerId = null;
+  saveMockDraft();
+  renderMockDraft();
+  renderBoard();
+}
+
 // ── PERSISTENCE ──────────────────────────────────────────────────────
 function saveProspects() {
   try { localStorage.setItem('nfl_prospects', JSON.stringify(PROSPECTS)); } catch(e) {}
@@ -1532,6 +1746,7 @@ function loadProspects() {
 
 // ── INIT ─────────────────────────────────────────────────────────────
 loadProspects();
+loadMockDraft();
 renderBoard();
 </script>
 </body>
