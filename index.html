@@ -315,13 +315,17 @@
         <button class="filter-btn" id="sort-pfsn" onclick="sortBoard('pfsn',this)">PFSN</button>
         <button class="filter-btn" id="sort-cbs" onclick="sortBoard('cbs',this)">CBS</button>
         <button class="filter-btn" id="sort-ras" onclick="sortBoard('ras',this)">RAS</button>
-        <button class="filter-btn" id="combine-toggle-btn" onclick="toggleCombineFilters()" style="margin-left:8px;">📐 Combine</button>
-        <button class="filter-btn" id="tiers-toggle-btn" onclick="toggleTierZones()">🏷 Tiers</button>
-        <button class="filter-btn" onclick="autoTier()">⚡ Auto-Tier</button>
-        <button class="filter-btn" onclick="clearAllTiers()">✕ Clear Tiers</button>
       </div>
     </div>
     <input class="search-bar" id="search-input" type="text" placeholder="Search by name or school..." oninput="renderBoard()">
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--bg);">
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Tools:</span>
+      <button class="filter-btn" id="combine-toggle-btn" onclick="toggleCombineFilters()">📐 Combine Filters</button>
+      <div style="width:1px;height:16px;background:var(--border);margin:0 4px;"></div>
+      <button class="filter-btn" id="tiers-toggle-btn" onclick="toggleTierZones()">🏷 Edit Tiers</button>
+      <button class="filter-btn" onclick="autoTier()">⚡ Auto-Tier</button>
+      <button class="filter-btn" onclick="clearAllTiers()">✕ Clear Tiers</button>
+    </div>
     <div id="combine-row" style="display:none;" class="combine-row">
       <span class="combine-label">Combine Filters:</span>
       <span class="combine-label">40 ≤</span><input class="combine-input" id="cf-forty" type="number" step="0.01" placeholder="e.g. 4.5" oninput="renderBoard()"><span class="combine-label">s</span>
