@@ -259,6 +259,20 @@
   .rc-otis-output { padding:16px; background:var(--bg); border-top:1px solid var(--border); font-size:13px; line-height:1.7; color:var(--text); }
   .rc-otis-output .otis-label { font-size:11px; color:var(--gold); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
   .rc-no-picks { font-size:12px; color:var(--border); font-style:italic; }
+
+  /* TIERS */
+  .tier-header { display:flex; align-items:center; gap:8px; padding:7px 16px 5px; background:var(--surface); border-top:2px solid var(--gold); }
+  .tier-label { font-family:'Bebas Neue',sans-serif; letter-spacing:1.5px; color:var(--gold); font-size:13px; flex:1; }
+  .tier-action-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:12px; padding:2px 5px; border-radius:3px; }
+  .tier-action-btn:hover { color:var(--text); background:var(--surface2); }
+  .tier-add-zone { text-align:center; }
+  .tier-add-zone button { font-size:10px; color:var(--border); background:none; border:none; cursor:pointer; padding:1px 10px; width:100%; opacity:0; transition:opacity 0.15s; }
+  .tier-add-zone:hover button { opacity:1; }
+
+  /* COMBINE FILTERS */
+  .combine-row { padding:8px 16px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .combine-input { background:var(--surface2); border:1px solid var(--border); border-radius:5px; padding:4px 7px; color:var(--text); font-size:11px; font-family:'DM Mono',monospace; width:58px; }
+  .combine-label { font-size:11px; color:var(--muted); white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -301,9 +315,19 @@
         <button class="filter-btn" id="sort-pfsn" onclick="sortBoard('pfsn',this)">PFSN</button>
         <button class="filter-btn" id="sort-cbs" onclick="sortBoard('cbs',this)">CBS</button>
         <button class="filter-btn" id="sort-ras" onclick="sortBoard('ras',this)">RAS</button>
+        <button class="filter-btn" id="combine-toggle-btn" onclick="toggleCombineFilters()" style="margin-left:8px;">📐 Combine</button>
+        <button class="filter-btn" id="tiers-toggle-btn" onclick="toggleTierZones()">🏷 Tiers</button>
       </div>
     </div>
     <input class="search-bar" id="search-input" type="text" placeholder="Search by name or school..." oninput="renderBoard()">
+    <div id="combine-row" style="display:none;" class="combine-row">
+      <span class="combine-label">Combine Filters:</span>
+      <span class="combine-label">40 ≤</span><input class="combine-input" id="cf-forty" type="number" step="0.01" placeholder="e.g. 4.5" oninput="renderBoard()"><span class="combine-label">s</span>
+      <span class="combine-label">Weight ≥</span><input class="combine-input" id="cf-weight" type="number" placeholder="lbs" oninput="renderBoard()">
+      <span class="combine-label">Height ≥</span><input class="combine-input" id="cf-height" type="text" placeholder="6-2" oninput="renderBoard()">
+      <span class="combine-label">RAS ≥</span><input class="combine-input" id="cf-ras" type="number" step="0.1" placeholder="0–10" oninput="renderBoard()">
+      <button class="filter-btn" onclick="clearCombineFilters()">Clear</button>
+    </div>
     <div class="filters" id="filters">
       <button class="filter-btn active" onclick="filterPos('ALL',this)">ALL</button>
       <button class="filter-btn" onclick="filterPos('QB',this)">QB</button>
@@ -377,6 +401,8 @@
       <span id="mock-progress-counter" style="font-size:11px;color:var(--muted);white-space:nowrap;"></span>
       <button class="btn btn-outline" style="font-size:12px;" onclick="simAllRemaining()">⚡ Sim All</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="undoLastPick()">↩ Undo</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="saveDraftAs()">💾 Save</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openLoadDraftModal()">📂 Load</button>
       <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
     </div>
@@ -464,6 +490,17 @@
       <div class="detail-tab" id="mock-ptab-otis" onclick="switchMockProfileTab('otis')" style="flex:1;text-align:center;padding:10px;font-size:12px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;">🐶 Otis</div>
     </div>
     <div id="mock-profile-content" style="max-height:65vh;overflow-y:auto;padding:16px;"></div>
+  </div>
+</div>
+
+<!-- LOAD DRAFT MODAL -->
+<div id="load-draft-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeLoadDraftModal()">
+  <div class="modal-box" style="max-width:500px;">
+    <div class="modal-header">
+      <h2>📂 Saved Drafts</h2>
+      <button class="modal-close" onclick="closeLoadDraftModal()">✕ Close</button>
+    </div>
+    <div class="modal-body" id="load-draft-body" style="padding:16px;max-height:60vh;overflow-y:auto;"></div>
   </div>
 </div>
 
@@ -582,6 +619,8 @@ let selectedId = null;
 let activeDetailTab = 'detail';
 let dragSrcIdx = null;
 let aiHistory = [];
+let TIERS = []; // [{name, startIdx}] — tier header shown before PROSPECTS[startIdx]
+let showTierZones = false;
 
 // ── HELPERS ──────────────────────────────────────────────────────────
 function heightToInches(h) {
@@ -646,21 +685,36 @@ function filterPos(pos, btn) {
 
 function renderBoard() {
   const query = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const combineFn = getCombineFilterFn();
   const filtered = PROSPECTS.filter(p =>
     (currentFilter === 'ALL' || p.pos === currentFilter) &&
-    (!query || p.name.toLowerCase().includes(query) || p.school.toLowerCase().includes(query))
+    (!query || p.name.toLowerCase().includes(query) || p.school.toLowerCase().includes(query)) &&
+    combineFn(p)
   );
   document.getElementById('prospect-count').textContent = `${filtered.length} / ${PROSPECTS.length} prospects`;
 
   const list = document.getElementById('prospect-list');
   list.innerHTML = '';
   filtered.forEach(p => {
-    const displayRank = PROSPECTS.indexOf(p) + 1;
+    const origIdx = PROSPECTS.indexOf(p);
+    const displayRank = origIdx + 1;
+
+    // Tier header before this prospect?
+    const tier = TIERS.find(t => t.startIdx === origIdx);
+    if (tier) {
+      const tierEl = document.createElement('div');
+      tierEl.className = 'tier-header';
+      tierEl.innerHTML = `<span class="tier-label">${tier.name}</span>
+        <button class="tier-action-btn" onclick="renameTier(${origIdx})" title="Rename">✎</button>
+        <button class="tier-action-btn" onclick="deleteTier(${origIdx})" title="Delete">✕</button>`;
+      list.appendChild(tierEl);
+    }
+
     const row = document.createElement('div');
     row.className = 'prospect-row' + (selectedId === p.id ? ' selected' : '');
     row.draggable = true;
     row.dataset.id = p.id;
-    row.dataset.origIdx = PROSPECTS.indexOf(p);
+    row.dataset.origIdx = origIdx;
 
     const avgRank = Math.round((p.espn + p.pff + p.pfsn + p.cbs) / 4);
     const diff = avgRank - displayRank;
@@ -702,6 +756,14 @@ function renderBoard() {
     row.addEventListener('drop', onDrop);
     row.addEventListener('dragend', onDragEnd);
     list.appendChild(row);
+
+    // Add-tier zone after each row (visible on hover when tiers mode is on)
+    if (showTierZones) {
+      const addZone = document.createElement('div');
+      addZone.className = 'tier-add-zone';
+      addZone.innerHTML = `<button onclick="addTierAfter(${origIdx})">⊕ add tier break here</button>`;
+      list.appendChild(addZone);
+    }
   });
 }
 
@@ -2802,9 +2864,155 @@ function loadProspects() {
   } catch(e) {}
 }
 
+// ── TIERS ─────────────────────────────────────────────────────────────
+function saveTiers() { try { localStorage.setItem('nfl_tiers', JSON.stringify(TIERS)); } catch(e) {} }
+function loadTiers() { try { const s = localStorage.getItem('nfl_tiers'); if (s) TIERS = JSON.parse(s); } catch(e) {} }
+
+function toggleTierZones() {
+  showTierZones = !showTierZones;
+  const btn = document.getElementById('tiers-toggle-btn');
+  if (btn) btn.classList.toggle('active', showTierZones);
+  renderBoard();
+}
+
+function addTierAfter(origIdx) {
+  const name = prompt('Tier name (e.g. "Round 1", "Elite"):', 'Tier');
+  if (!name) return;
+  const startIdx = origIdx + 1;
+  if (startIdx >= PROSPECTS.length) return;
+  TIERS = TIERS.filter(t => t.startIdx !== startIdx);
+  TIERS.push({ name, startIdx });
+  TIERS.sort((a, b) => a.startIdx - b.startIdx);
+  saveTiers();
+  renderBoard();
+}
+
+function deleteTier(startIdx) {
+  TIERS = TIERS.filter(t => t.startIdx !== startIdx);
+  saveTiers();
+  renderBoard();
+}
+
+function renameTier(startIdx) {
+  const tier = TIERS.find(t => t.startIdx === startIdx);
+  if (!tier) return;
+  const name = prompt('Rename tier:', tier.name);
+  if (!name) return;
+  tier.name = name;
+  saveTiers();
+  renderBoard();
+}
+
+// ── COMBINE FILTERS ────────────────────────────────────────────────────
+function toggleCombineFilters() {
+  const row = document.getElementById('combine-row');
+  const btn = document.getElementById('combine-toggle-btn');
+  const show = row.style.display === 'none';
+  row.style.display = show ? '' : 'none';
+  if (btn) btn.classList.toggle('active', show);
+  if (!show) clearCombineFilters();
+}
+
+function clearCombineFilters() {
+  ['cf-forty', 'cf-weight', 'cf-height', 'cf-ras'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderBoard();
+}
+
+function getCombineFilterFn() {
+  const fortyMax = parseFloat(document.getElementById('cf-forty')?.value);
+  const weightMin = parseFloat(document.getElementById('cf-weight')?.value);
+  const heightMinRaw = document.getElementById('cf-height')?.value || '';
+  const heightMin = heightToInches(heightMinRaw);
+  const rasMin = parseFloat(document.getElementById('cf-ras')?.value);
+  return p => {
+    if (!isNaN(fortyMax) && fortyMax > 0 && (p.forty === '—' || parseFloat(p.forty) > fortyMax)) return false;
+    if (!isNaN(weightMin) && weightMin > 0 && p.weight < weightMin) return false;
+    if (heightMin > 0 && heightToInches(p.height) < heightMin) return false;
+    if (!isNaN(rasMin) && rasMin > 0 && p.ras < rasMin) return false;
+    return true;
+  };
+}
+
+// ── SAVED MOCK DRAFTS ──────────────────────────────────────────────────
+function getSavedDrafts() {
+  try { return JSON.parse(localStorage.getItem('nfl_saved_drafts') || '{}'); } catch(e) { return {}; }
+}
+
+function saveDraftAs() {
+  const name = prompt('Name this draft:', `Mock Draft ${new Date().toLocaleDateString()}`);
+  if (!name) return;
+  const drafts = getSavedDrafts();
+  drafts[name] = {
+    picks: MOCK_PICKS.map(p => ({ id: p.playerId || null, sim: p.simulated || false })),
+    team: myMockTeam || null,
+    savedAt: new Date().toISOString(),
+  };
+  localStorage.setItem('nfl_saved_drafts', JSON.stringify(drafts));
+  showToast(`💾 "${name}" saved`);
+}
+
+function openLoadDraftModal() {
+  const drafts = getSavedDrafts();
+  if (!Object.keys(drafts).length) { showToast('No saved drafts yet — use 💾 Save first'); return; }
+  document.getElementById('load-draft-modal').style.display = 'flex';
+  renderLoadDraftList();
+}
+
+function closeLoadDraftModal() {
+  document.getElementById('load-draft-modal').style.display = 'none';
+}
+
+function renderLoadDraftList() {
+  const drafts = getSavedDrafts();
+  const body = document.getElementById('load-draft-body');
+  const entries = Object.entries(drafts);
+  if (!entries.length) { body.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;">No saved drafts</div>'; return; }
+  body.innerHTML = entries.sort((a, b) => new Date(b[1].savedAt) - new Date(a[1].savedAt)).map(([name, data]) => {
+    const picks = (data.picks || []).filter(p => p.id).length;
+    const date = new Date(data.savedAt).toLocaleString();
+    const safeN = name.replace(/'/g, "\\'");
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="flex:1;">
+        <div style="font-weight:600;color:var(--text);font-size:13px;">${name}</div>
+        <div style="font-size:11px;color:var(--muted);">${date}${data.team ? ` · ${data.team}` : ''} · ${picks} picks made</div>
+      </div>
+      <button class="btn btn-outline" style="font-size:11px;padding:5px 10px;" onclick="loadSavedDraft('${safeN}')">Load</button>
+      <button class="btn btn-outline" style="font-size:11px;padding:5px 10px;color:var(--red);border-color:var(--red);" onclick="deleteSavedDraft('${safeN}')">Delete</button>
+    </div>`;
+  }).join('');
+}
+
+function loadSavedDraft(name) {
+  const drafts = getSavedDrafts();
+  const data = drafts[name];
+  if (!data) return;
+  (data.picks || []).forEach((d, i) => {
+    if (!MOCK_PICKS[i]) return;
+    MOCK_PICKS[i].playerId = d.id || null;
+    MOCK_PICKS[i].simulated = d.sim || false;
+  });
+  myMockTeam = data.team || null;
+  closeLoadDraftModal();
+  renderMockDraft();
+  renderBoard();
+  showToast(`📂 Loaded "${name}"`);
+}
+
+function deleteSavedDraft(name) {
+  if (!confirm(`Delete "${name}"?`)) return;
+  const drafts = getSavedDrafts();
+  delete drafts[name];
+  localStorage.setItem('nfl_saved_drafts', JSON.stringify(drafts));
+  renderLoadDraftList();
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────
 loadProspects();
 loadMockDraft();
+loadTiers();
 renderBoard();
 </script>
 </body>
