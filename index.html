@@ -1345,22 +1345,21 @@ function confirmImport() {
 
   } else if (isCombine) {
     const existingMap = new Map(PROSPECTS.map(p => [p.name.toLowerCase(), p]));
-    let updated = 0, added = 0;
+    let updated = 0, skipped = 0;
     incoming.forEach(p => {
       const match = existingMap.get(p.name.toLowerCase());
       if (match) {
-        if (p.ras > 0)      match.ras    = p.ras;
+        if (p.ras > 0)       match.ras    = p.ras;
         if (p.forty !== '—') match.forty  = p.forty;
         if (p.height !== '—') match.height = p.height;
-        if (p.weight > 0)   match.weight  = p.weight;
-        if (p.arm !== '—')  match.arm     = p.arm;
+        if (p.weight > 0)    match.weight  = p.weight;
+        if (p.arm !== '—')   match.arm     = p.arm;
         updated++;
       } else {
-        PROSPECTS.push(p);
-        added++;
+        skipped++;
       }
     });
-    showToast(`✓ Combine data: updated ${updated}, added ${added} · ${PROSPECTS.length} total`);
+    showToast(`✓ Combine data: updated ${updated}, skipped ${skipped} not on board · ${PROSPECTS.length} total`);
 
   } else if (IMP.rankTarget !== 'all') {
     // Targeted: update one ranking field by name match, add new players with others unranked
