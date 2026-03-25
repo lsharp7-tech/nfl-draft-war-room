@@ -2505,8 +2505,17 @@ function valueScore(pick) {
   const p = PROSPECTS.find(x => x.id === pick.playerId);
   if (!p) return null;
   const boardRank = PROSPECTS.indexOf(p) + 1;
-  const raw = pick.pick - boardRank; // positive = value, negative = reach
+  // Cap at ±30 so late-round prospect pool exhaustion doesn't inflate scores
+  const raw = Math.max(-30, Math.min(30, pick.pick - boardRank));
   return Math.round(raw * roundWeight(pick.round));
+}
+
+// Adjusted score adds a +5 needs bonus if the pick fills a team need
+function adjustedScore(pick, needs) {
+  const base = valueScore(pick);
+  if (base === null) return null;
+  const p = PROSPECTS.find(x => x.id === pick.playerId);
+  return base + (p && needs && needs.includes(p.pos) ? 5 : 0);
 }
 
 // Thresholds account for round weighting (R1 picks worth 3x)
@@ -2537,7 +2546,8 @@ function buildTeamReport() {
     // Only grade real (non-simulated) picks
     const filled = allFilled.filter(p => !p.simulated);
     const simCount = allFilled.length - filled.length;
-    const scores = filled.map(valueScore).filter(v => v !== null);
+    const needs = TEAM_NEEDS[team] || [];
+    const scores = filled.map(pick => adjustedScore(pick, needs)).filter(v => v !== null);
     const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
     return { team, picks, filled, simCount, avg, grade: avg !== null ? gradeFromValue(avg) : null };
   }).sort((a, b) => (b.avg ?? -999) - (a.avg ?? -999));
@@ -2570,7 +2580,7 @@ function openDraftSummary() {
 function renderDraftSummary(myPicks) {
   const body = document.getElementById('summary-body');
   const needs = TEAM_NEEDS[myMockTeam] || [];
-  const scores = myPicks.map(valueScore).filter(v => v !== null);
+  const scores = myPicks.map(pick => adjustedScore(pick, needs)).filter(v => v !== null);
   const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   const grade = scores.length ? gradeFromValue(avg) : null;
 
@@ -2621,7 +2631,7 @@ async function summaryAskOtis() {
   if (el) el.textContent = 'Analyzing your draft class...';
   if (!getApiKey()) { if (el) el.textContent = '⚠️ No API key set.'; return; }
 
-  const scores = myPicks.map(valueScore).filter(v => v !== null);
+  const scores = myPicks.map(pick => adjustedScore(pick, needs)).filter(v => v !== null);
   const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   const grade = gradeFromValue(avg);
 
@@ -2714,7 +2724,7 @@ function renderReportCard() {
       </table>
     </div>
     <div style="padding:12px 16px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);">
-      Avg Value = (pick position − board rank) × round weight. Round 1 picks count 3×, Round 2 count 2×, Round 3 count 1.5×. Positive = value, negative = reach.
+      Avg Value = (pick − board rank, capped ±30) × round weight + needs bonus (+5 per need filled). R1=3×, R2=2×, R3=1.5×, R4-7=1×. Positive = value, negative = reach.
     </div>`;
 }
 
