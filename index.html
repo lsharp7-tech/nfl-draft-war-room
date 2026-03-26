@@ -4680,11 +4680,24 @@ function importAllData() {
   const boardId = new URLSearchParams(location.search).get('board');
   if (boardId) {
     try {
-      const resp = await fetch(`https://api.github.com/gists/${encodeURIComponent(boardId)}`, { headers: { 'Accept': 'application/vnd.github+json' } });
-      if (!resp.ok) throw new Error(`Board not found (${resp.status})`);
+      const hdrs = { 'Accept': 'application/vnd.github+json' };
+      const tok = getGithubToken();
+      if (tok) hdrs['Authorization'] = `token ${tok}`;
+      const resp = await fetch(`https://api.github.com/gists/${boardId}`, { headers: hdrs });
+      if (!resp.ok) {
+        const e = await resp.json().catch(() => ({}));
+        throw new Error(`GitHub ${resp.status}: ${e.message || 'request failed'}`);
+      }
       const gist = await resp.json();
-      const raw = JSON.parse(gist.files?.['board.json']?.content || 'null');
-      if (!raw) throw new Error('Empty board data');
+      const fileObj = gist.files?.['board.json'];
+      if (!fileObj) throw new Error('board.json missing from gist');
+      let fileContent = fileObj.content;
+      if (fileObj.truncated && fileObj.raw_url) {
+        const r2 = await fetch(fileObj.raw_url);
+        if (!r2.ok) throw new Error('Failed to fetch raw gist content');
+        fileContent = await r2.text();
+      }
+      const raw = JSON.parse(fileContent);
       let prospects, tiers;
       if (raw.f && raw.p) {
         const fields = raw.f;
@@ -4700,13 +4713,19 @@ function importAllData() {
       } else {
         throw new Error('Unrecognized board format');
       }
-      if (!prospects.length) throw new Error('No prospects in shared board');
+      if (!prospects.length) throw new Error('Gist had 0 prospects');
       _sharedProspects = { prospects, tiers };
       PROSPECTS = prospects;
       TIERS = tiers;
       VIEWING_SHARED = true;
     } catch(e) {
-      showToast('⚠️ Could not load shared board — showing your own');
+      setTimeout(() => {
+        const el = document.createElement('div');
+        el.setAttribute('style', 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;padding:10px 20px;font-size:12px;font-weight:600;text-align:center;cursor:pointer;');
+        el.textContent = '⚠️ Board load failed: ' + e.message + ' — tap to dismiss';
+        el.onclick = () => el.remove();
+        document.body.prepend(el);
+      }, 600);
       loadProspects();
       loadTiers();
     }
