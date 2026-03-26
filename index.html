@@ -2056,7 +2056,7 @@ async function shareBoard() {
       p: PROSPECTS.map(p => FIELDS.map(f => p[f] ?? null)),
       t: TIERS
     };
-    const resp = await fetch('/api/board-save', {
+    const resp = await fetch('/.netlify/functions/board-save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -4655,7 +4655,7 @@ function importAllData() {
   const boardId = new URLSearchParams(location.search).get('board');
   if (boardId) {
     try {
-      const resp = await fetch(`/api/board-load?id=${encodeURIComponent(boardId)}`);
+      const resp = await fetch(`/.netlify/functions/board-load?id=${encodeURIComponent(boardId)}`);
       if (!resp.ok) throw new Error(`Board not found (${resp.status})`);
       const raw = await resp.json();
       let prospects, tiers;
