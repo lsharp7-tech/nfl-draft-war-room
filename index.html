@@ -23,6 +23,9 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
 
+  /* BOARD LOCK BANNER */
+  #board-lock-banner { background:#1a1400;border:1px solid var(--gold);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:8px; }
+
   /* LIVE DRAFT */
   .live-layout { display:flex; height:calc(100vh - 111px); overflow:hidden; }
   .live-col { display:flex; flex-direction:column; overflow:hidden; }
@@ -324,6 +327,7 @@
   </div>
   <div class="header-actions">
     <span id="prospect-count" style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
+    <button class="btn btn-outline" id="lock-board-btn" onclick="toggleBoardLock()">🔒 Lock Board</button>
     <button class="btn btn-outline" onclick="openAddProspectModal()">➕ Add Prospect</button>
     <button class="btn btn-outline" onclick="openImportModal()">⬆ Import Players</button>
     <button class="btn btn-outline" onclick="exportCSV()">⬇ Export CSV</button>
@@ -356,6 +360,7 @@
         <button class="filter-btn" id="sort-ras" onclick="sortBoard('ras',this)">RAS</button>
       </div>
     </div>
+    <div id="board-lock-banner" style="display:none;">🔒 Board is locked — rankings are preserved for draft night.</div>
     <input class="search-bar" id="search-input" type="text" placeholder="Search by name or school..." oninput="renderBoard()">
     <div style="display:flex;align-items:center;gap:8px;padding:10px 16px 10px;border-bottom:1px solid var(--border);background:var(--bg);">
       <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Tools:</span>
@@ -529,6 +534,28 @@
   </div>
 </div>
 
+<!-- LIVE REPORT CARD MODAL -->
+<div id="live-report-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeLiveReportCard()">
+  <div class="modal-box" style="max-width:920px;">
+    <div class="modal-header">
+      <h2>📊 Real Draft Report Card</h2>
+      <button class="modal-close" onclick="closeLiveReportCard()">✕ Close</button>
+    </div>
+    <div id="live-report-body" style="overflow-y:auto;max-height:70vh;padding:0;"></div>
+  </div>
+</div>
+
+<!-- MOCK VS REALITY MODAL -->
+<div id="mvr-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeMockVsReal()">
+  <div class="modal-box" style="max-width:860px;">
+    <div class="modal-header">
+      <h2>📋 Mock vs. Reality</h2>
+      <button class="modal-close" onclick="closeMockVsReal()">✕ Close</button>
+    </div>
+    <div id="mvr-body" style="overflow-y:auto;max-height:70vh;padding:0;"></div>
+  </div>
+</div>
+
 <!-- LIVE DRAFT VIEW -->
 <div id="live-draft-view" style="display:none;width:100%;">
   <!-- top bar -->
@@ -538,6 +565,8 @@
       <span id="live-progress-label" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
     </div>
     <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openMockVsReal()">📋 vs Mock</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openLiveReportCard()">📊 Real Grades</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="undoLivePick()">↩ Undo</button>
       <button class="btn btn-red" style="font-size:12px;" onclick="resetLiveDraft()">↺ Reset</button>
     </div>
@@ -877,6 +906,10 @@ function renderBoard() {
     combineFn(p)
   );
   document.getElementById('prospect-count').textContent = `${filtered.length} / ${PROSPECTS.length} prospects`;
+  const lockBanner = document.getElementById('board-lock-banner');
+  if (lockBanner) lockBanner.style.display = BOARD_LOCKED ? 'flex' : 'none';
+  const lockBtn = document.getElementById('lock-board-btn');
+  if (lockBtn) { lockBtn.textContent = BOARD_LOCKED ? '🔓 Unlock Board' : '🔒 Lock Board'; lockBtn.style.color = BOARD_LOCKED ? 'var(--gold)' : ''; lockBtn.style.borderColor = BOARD_LOCKED ? 'var(--gold)' : ''; }
 
   const list = document.getElementById('prospect-list');
   list.innerHTML = '';
@@ -900,7 +933,7 @@ function renderBoard() {
 
     const row = document.createElement('div');
     row.className = 'prospect-row' + (selectedId === p.id ? ' selected' : '');
-    row.draggable = true;
+    row.draggable = !BOARD_LOCKED;
     row.dataset.id = p.id;
     row.dataset.origIdx = origIdx;
 
@@ -935,14 +968,17 @@ function renderBoard() {
       <div class="actions">
         <button class="row-btn row-btn-ai" onclick="event.stopPropagation();quickAI(${p.id})">AI</button>
         <button class="row-btn row-btn-compare" onclick="event.stopPropagation();addToCompare(${p.id})">+CMP</button>
+        <button class="row-btn" onclick="event.stopPropagation();toggleWatchlist(${p.id})" style="color:${WATCHLIST.has(p.id)?'var(--gold)':'var(--muted)'};font-size:14px;" title="${WATCHLIST.has(p.id)?'Remove from watchlist':'Add to watchlist'}">★</button>
       </div>
     `;
 
     row.addEventListener('click', () => selectProspect(p.id));
-    row.addEventListener('dragstart', onDragStart);
-    row.addEventListener('dragover', onDragOver);
-    row.addEventListener('drop', onDrop);
-    row.addEventListener('dragend', onDragEnd);
+    if (!BOARD_LOCKED) {
+      row.addEventListener('dragstart', onDragStart);
+      row.addEventListener('dragover', onDragOver);
+      row.addEventListener('drop', onDrop);
+      row.addEventListener('dragend', onDragEnd);
+    }
     list.appendChild(row);
 
     // Add-tier zone after each row (visible on hover when tiers mode is on)
@@ -3932,17 +3968,23 @@ function renderLiveFeed() {
       : '';
     const posBadge = prospect ? `<span class="pos-badge pos-${prospect.pos}" style="font-size:9px;padding:1px 5px;">${prospect.pos}</span>` : '';
 
-    return `${roundHdr}<div class="live-feed-item">
-      <div style="min-width:38px;">
-        <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--text);">#${pickNum}</div>
-        <div style="font-size:9px;color:var(--muted);">Rd ${pick.round}</div>
+    return `${roundHdr}<div style="border-bottom:1px solid var(--border);">
+      <div class="live-feed-item" style="border-bottom:none;">
+        <div style="min-width:38px;">
+          <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--text);">#${pickNum}</div>
+          <div style="font-size:9px;color:var(--muted);">Rd ${pick.round}</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:10px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${teamRaw}</div>
+          <div style="display:flex;align-items:center;gap:5px;">${posBadge}<span style="font-size:13px;font-weight:600;">${d.playerName}</span></div>
+          <div style="margin-top:2px;">${boardRank?`<span style="font-size:10px;color:var(--muted);">Board #${boardRank} · </span>`:''} ${valueStr}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+          ${reaction ? `<div style="font-size:11px;font-weight:700;color:${reaction.color};white-space:nowrap;text-align:right;">${reaction.emoji}<div style="font-size:9px;margin-top:1px;">${reaction.label}</div></div>` : ''}
+          <button onclick="liveAskOtis(${pickNum})" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--muted);font-size:10px;padding:2px 6px;cursor:pointer;white-space:nowrap;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">🐶 Otis</button>
+        </div>
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${teamRaw}</div>
-        <div style="display:flex;align-items:center;gap:5px;">${posBadge}<span style="font-size:13px;font-weight:600;">${d.playerName}</span></div>
-        <div style="margin-top:2px;">${boardRank?`<span style="font-size:10px;color:var(--muted);">Board #${boardRank} · </span>`:''} ${valueStr}</div>
-      </div>
-      ${reaction ? `<div style="font-size:11px;font-weight:700;color:${reaction.color};white-space:nowrap;text-align:right;">${reaction.emoji}<div style="font-size:9px;margin-top:1px;">${reaction.label}</div></div>` : ''}
+      <div id="live-otis-${pickNum}" style="padding:0 14px 0;"></div>
     </div>`;
   }).join('');
 }
@@ -3969,7 +4011,14 @@ function renderLiveAvailable() {
     `<button class="filter-btn${livePosFilter===pos?' active':''}" style="font-size:10px;padding:3px 9px;" onclick="setLivePosFilter('${pos}')">${pos}</button>`
   ).join('');
   const allAvail = PROSPECTS.filter(p => !draftedIds.has(p.id) && !draftedNames.has(p.name.toLowerCase()));
-  const filtered = allAvail.filter(p => livePosFilter === 'ALL' || p.pos === livePosFilter);
+  const filtered = allAvail
+    .filter(p => livePosFilter === 'ALL' || p.pos === livePosFilter)
+    .sort((a, b) => {
+      const aW = WATCHLIST.has(a.id) ? 0 : 1;
+      const bW = WATCHLIST.has(b.id) ? 0 : 1;
+      if (aW !== bW) return aW - bW;
+      return PROSPECTS.indexOf(a) - PROSPECTS.indexOf(b);
+    });
   el.innerHTML = `
     <div style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:0;z-index:2;">
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${allAvail.length} prospects available</div>
@@ -3978,10 +4027,13 @@ function renderLiveAvailable() {
     ${filtered.length ? filtered.slice(0,150).map(p => {
       const rank = PROSPECTS.indexOf(p) + 1;
       const grade = computeGrade(p);
-      return `<div class="live-avail-item">
+      const watched = WATCHLIST.has(p.id);
+      const falling = watched && liveCurrentPick > rank + 15;
+      return `<div class="live-avail-item" style="${watched ? 'background:#1a1400;border-left:2px solid var(--gold);padding-left:12px;' : ''}">
         <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:26px;">#${rank}</span>
         <span class="pos-badge pos-${p.pos}" style="font-size:9px;padding:1px 5px;">${p.pos}</span>
-        <span style="flex:1;font-size:12px;font-weight:500;">${p.name}</span>
+        <span style="flex:1;font-size:12px;font-weight:${watched ? '700' : '500'};color:${watched ? 'var(--gold2)' : 'var(--text)'};">${p.name}${falling ? ' <span style="color:var(--red);font-size:9px;font-weight:700;">📉 FALLING</span>' : ''}</span>
+        ${watched ? '<span style="color:var(--gold);font-size:12px;margin-right:4px;">★</span>' : ''}
         <span style="font-size:11px;font-weight:700;color:${getGradeColor(grade)}">${grade}</span>
       </div>`;
     }).join('') : `<div style="padding:24px;text-align:center;font-size:12px;color:var(--muted);">${livePosFilter==='ALL'?'All prospects drafted':'No '+livePosFilter+' prospects available'}</div>`}`;
@@ -4026,6 +4078,211 @@ function renderLiveNeeds() {
   }).join('');
 }
 
+// ── BOARD LOCK ────────────────────────────────────────────────────────
+let BOARD_LOCKED = false;
+function saveBoardLock() { try { localStorage.setItem('nfl_board_locked', BOARD_LOCKED ? '1' : '0'); } catch(e) {} }
+function loadBoardLock() { try { BOARD_LOCKED = localStorage.getItem('nfl_board_locked') === '1'; } catch(e) {} }
+function toggleBoardLock() {
+  if (!BOARD_LOCKED && !confirm('Lock your board? Dragging will be disabled to preserve your pre-draft rankings.')) return;
+  BOARD_LOCKED = !BOARD_LOCKED;
+  saveBoardLock();
+  renderBoard();
+  showToast(BOARD_LOCKED ? '🔒 Board locked' : '🔓 Board unlocked');
+}
+
+// ── WATCHLIST ─────────────────────────────────────────────────────────
+let WATCHLIST = new Set();
+function saveWatchlist() { try { localStorage.setItem('nfl_watchlist', JSON.stringify([...WATCHLIST])); } catch(e) {} }
+function loadWatchlist() { try { const s = localStorage.getItem('nfl_watchlist'); if (s) WATCHLIST = new Set(JSON.parse(s)); } catch(e) {} }
+function toggleWatchlist(id) {
+  if (WATCHLIST.has(id)) WATCHLIST.delete(id); else WATCHLIST.add(id);
+  saveWatchlist();
+  renderBoard();
+}
+
+// ── LIVE REPORT CARD ──────────────────────────────────────────────────
+function openLiveReportCard() {
+  if (!Object.keys(LIVE_DRAFT_PICKS).length) { showToast('No picks recorded yet'); return; }
+  document.getElementById('live-report-modal').style.display = 'flex';
+  renderLiveReportCard();
+}
+function closeLiveReportCard() { document.getElementById('live-report-modal').style.display = 'none'; }
+
+function renderLiveReportCard() {
+  const body = document.getElementById('live-report-body');
+  // Group by team
+  const byTeam = {};
+  Object.entries(LIVE_DRAFT_PICKS).forEach(([num, d]) => {
+    const pick = liveMockPick(+num);
+    if (!pick) return;
+    const raw = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+    const team = TEAM_NAME_MAP[raw] || raw;
+    if (!byTeam[team]) byTeam[team] = [];
+    byTeam[team].push({ pickNum: +num, pick, d });
+  });
+
+  const rows = Object.entries(byTeam).sort((a,b) => a[0].localeCompare(b[0])).map(([team, entries]) => {
+    const needs = TEAM_NEEDS[team] || [];
+    const scores = entries.map(({pickNum, pick, d}) => {
+      if (!d.playerId) return null;
+      const p = PROSPECTS.find(x => x.id === d.playerId);
+      if (!p) return null;
+      const boardRank = PROSPECTS.indexOf(p) + 1;
+      const raw = Math.max(-30, Math.min(30, pickNum - boardRank));
+      const rw = pick.round === 1 ? 3 : pick.round === 2 ? 2 : pick.round === 3 ? 1.5 : 1;
+      return Math.round(raw * rw) + (needs.includes(p.pos) ? 5 : 0);
+    }).filter(v => v !== null);
+    const avg = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : 0;
+    const grade = gradeFromValue(avg);
+    const needsAddressed = entries.filter(({d}) => { const p = d.playerId ? PROSPECTS.find(x=>x.id===d.playerId):null; return p && needs.includes(p.pos); }).length;
+    const needsBadges = needs.map(pos => `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:1px 5px;">${pos}</span>`).join(' ');
+
+    const picksList = entries.map(({pickNum, pick: pk, d}, i) => {
+      const p = d.playerId ? PROSPECTS.find(x=>x.id===d.playerId) : null;
+      const boardRank = p ? PROSPECTS.indexOf(p)+1 : null;
+      const sc = scores[i];
+      const scoreStr = sc != null ? (sc > 0 ? `<span class="rc-value-pos">+${sc}</span>` : sc < 0 ? `<span class="rc-value-neg">${sc}</span>` : `<span style="color:var(--muted)">±0</span>`) : '';
+      const badge = p ? `<span class="pos-badge pos-${p.pos}" style="font-size:9px;">${p.pos}</span>` : '';
+      const fillsNeed = p && needs.includes(p.pos);
+      return `<span style="color:${fillsNeed?'var(--text)':'var(--muted)'}">#${pickNum} ${badge} ${d.playerName}${boardRank?` — #${boardRank}`:''} ${scoreStr}</span>`;
+    }).join('<br>');
+
+    const safeTeam = team.replace(/'/g,"\\'");
+    const elId = 'lrc-otis-' + team.replace(/[^a-zA-Z]/g,'');
+    return `<tr>
+      <td style="font-weight:700;white-space:nowrap;min-width:150px;">${team}<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px;">${needsBadges}</div></td>
+      <td><span class="rc-grade" style="color:${grade.color}">${grade.letter}</span></td>
+      <td><span style="color:${avg>=0?'var(--green)':'var(--red)'}">${avg>=0?'+':''}${avg.toFixed(1)}</span><div style="font-size:10px;color:var(--muted);margin-top:2px;">${needsAddressed}/${entries.length} needs</div></td>
+      <td><div class="rc-picks-list">${picksList}</div></td>
+      <td style="min-width:110px;vertical-align:top;">
+        <button class="btn btn-gold" style="font-size:11px;padding:5px 10px;" onclick="liveGradeTeamWithOtis('${safeTeam}')">🐶 Ask Otis</button>
+        <div id="${elId}" style="margin-top:6px;font-size:12px;"></div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<table class="rc-table"><thead><tr><th>Team</th><th>Grade</th><th>Avg Value</th><th>Picks</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function liveGradeTeamWithOtis(team) {
+  const elId = 'lrc-otis-' + team.replace(/[^a-zA-Z]/g,'');
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!getApiKey()) { el.innerHTML = '<span style="color:var(--gold)">⚠️ No API key.</span>'; return; }
+  el.innerHTML = '<span style="color:var(--muted);font-style:italic;font-size:11px;">Otis is grading...</span>';
+  const needs = TEAM_NEEDS[team] || [];
+  const entries = Object.entries(LIVE_DRAFT_PICKS).filter(([num]) => {
+    const pick = liveMockPick(+num); if (!pick) return false;
+    const raw = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+    return (TEAM_NAME_MAP[raw]||raw) === team;
+  });
+  const summary = entries.map(([num, d]) => {
+    const pick = liveMockPick(+num);
+    const p = d.playerId ? PROSPECTS.find(x=>x.id===d.playerId) : null;
+    const boardRank = p ? PROSPECTS.indexOf(p)+1 : null;
+    return `Pick #${num} (R${pick?.round}): ${d.playerName}${p?` (${p.pos}, ${p.school})`:''}${boardRank?` — board #${boardRank}`:''}${p&&needs.includes(p.pos)?' ✓ NEED':''}`;
+  }).join('\n');
+  const prompt = `Grade the ${team}'s 2026 NFL Draft class. ${needs.length?`Needs: ${needs.join(', ')}.`:''}\n\nPicks:\n${summary}\n\nUsing your knowledge of the ${team}'s current roster, key players, and coach: give a letter grade (A-F), explain how picks fit their scheme and personnel, identify the best and worst pick, and comment on how well they addressed needs. 4-5 sentences.`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json','x-api-key':getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,system:'You are an expert NFL draft analyst with deep knowledge of all 32 teams — rosters, coaches, schemes. Be direct, specific, football terminology.',messages:[{role:'user',content:prompt}]}),
+    });
+    const data = await res.json();
+    const answer = data.error?`⚠️ ${data.error.message}`:(data.content?.[0]?.text||'No response.');
+    el.innerHTML = `<div style="background:var(--surface2);border:1px solid var(--gold);border-radius:6px;padding:10px;margin-top:4px;color:var(--text);line-height:1.6;font-size:12px;">${answer}</div>`;
+  } catch(err) { el.innerHTML = `<span style="color:var(--red);">⚠️ ${err.message}</span>`; }
+}
+
+// ── MOCK VS REALITY ───────────────────────────────────────────────────
+function openMockVsReal() {
+  if (!Object.keys(LIVE_DRAFT_PICKS).length) { showToast('No live picks recorded yet'); return; }
+  if (!MOCK_PICKS.some(p => p.playerId)) { showToast('No mock draft picks to compare'); return; }
+  document.getElementById('mvr-modal').style.display = 'flex';
+  renderMockVsReal();
+}
+function closeMockVsReal() { document.getElementById('mvr-modal').style.display = 'none'; }
+
+function renderMockVsReal() {
+  const body = document.getElementById('mvr-body');
+  const liveNums = Object.keys(LIVE_DRAFT_PICKS).map(Number).sort((a,b)=>a-b);
+  let correct = 0, total = 0, lastRound = 0;
+
+  const rows = liveNums.map(num => {
+    const live = LIVE_DRAFT_PICKS[num];
+    const mockPick = MOCK_PICKS.find(p => p.pick === num);
+    const mockProspect = mockPick?.playerId ? PROSPECTS.find(p=>p.id===mockPick.playerId) : null;
+    const liveProspect = live.playerId ? PROSPECTS.find(p=>p.id===live.playerId) : null;
+    const match = !!(live.playerId && mockPick?.playerId && live.playerId === mockPick.playerId);
+    if (mockPick?.playerId) total++;
+    if (match) correct++;
+    const pick = liveMockPick(num);
+    const teamRaw = pick ? pick.team.replace(/\s*\(via[^)]*\)/i,'').trim() : '';
+    let roundHdr = '';
+    if (pick && pick.round !== lastRound) {
+      lastRound = pick.round;
+      roundHdr = `<tr><td colspan="5" style="background:var(--bg);padding:6px 16px;font-family:'Bebas Neue',sans-serif;font-size:12px;letter-spacing:2px;color:var(--muted);">ROUND ${pick.round}</td></tr>`;
+    }
+    const liveBadge = liveProspect ? `<span class="pos-badge pos-${liveProspect.pos}" style="font-size:9px;padding:1px 4px;">${liveProspect.pos}</span> ` : '';
+    const mockBadge = mockProspect ? `<span class="pos-badge pos-${mockProspect.pos}" style="font-size:9px;padding:1px 4px;">${mockProspect.pos}</span> ` : '';
+    return `${roundHdr}<tr style="border-bottom:1px solid var(--border);${match?'background:#061006':''}">
+      <td style="padding:8px 12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">#${num}</td>
+      <td style="padding:8px 12px;font-size:11px;color:var(--muted);max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${teamRaw}</td>
+      <td style="padding:8px 12px;font-size:12px;">${liveBadge}<strong>${live.playerName}</strong></td>
+      <td style="padding:8px 12px;font-size:12px;color:var(--muted);">${mockProspect?`${mockBadge}${mockProspect.name}`:'<span style="color:var(--border)">—</span>'}</td>
+      <td style="padding:8px 12px;text-align:center;font-size:15px;">${match?'<span style="color:var(--green)">✓</span>':mockPick?.playerId?'<span style="color:var(--red)">✗</span>':'<span style="color:var(--muted)">—</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  const pct = total ? Math.round(correct/total*100) : 0;
+  body.innerHTML = `
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:20px;background:var(--surface);flex-wrap:wrap;">
+      <span style="font-size:13px;color:var(--muted);">Picks compared: <strong style="color:var(--text)">${total}</strong></span>
+      <span style="font-size:13px;color:var(--muted);">Correct: <strong style="color:var(--green)">${correct}</strong></span>
+      <span style="font-size:13px;color:var(--muted);">Accuracy: <strong style="color:${pct>=50?'var(--green)':'var(--muted)'}">${pct}%</strong></span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead style="background:var(--surface);position:sticky;top:0;z-index:2;">
+        <tr>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;">Pick</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;">Team</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--green);text-transform:uppercase;">Actual</th>
+          <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--blue);text-transform:uppercase;">Your Mock</th>
+          <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--muted);text-transform:uppercase;">Match</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── LIVE DRAFT OTIS ───────────────────────────────────────────────────
+async function liveAskOtis(pickNum) {
+  const d = LIVE_DRAFT_PICKS[pickNum];
+  if (!d) return;
+  const el = document.getElementById(`live-otis-${pickNum}`);
+  if (!el) return;
+  if (!getApiKey()) { el.innerHTML = '<span style="color:var(--gold);font-size:11px;">⚠️ No API key set.</span>'; return; }
+  el.innerHTML = '<div style="padding:6px 0;"><span style="color:var(--muted);font-style:italic;font-size:11px;">🐶 Otis is thinking...</span></div>';
+  const pick = liveMockPick(pickNum);
+  const teamRaw = pick ? pick.team.replace(/\s*\(via[^)]*\)/i,'').trim() : 'Unknown Team';
+  const teamKey = TEAM_NAME_MAP[teamRaw] || teamRaw;
+  const needs = TEAM_NEEDS[teamKey] || [];
+  const prospect = d.playerId ? PROSPECTS.find(p=>p.id===d.playerId) : null;
+  const boardRank = prospect ? PROSPECTS.indexOf(prospect)+1 : null;
+  const diff = boardRank ? pickNum - boardRank : null;
+  const valueDesc = diff===null?'':diff<-5?`(a steal — fell ${Math.abs(diff)} spots)`:diff>10?`(a big reach — taken ${diff} spots early)`:diff>3?`(a slight reach)`:' (fair value)';
+  const prompt = `The ${teamRaw} just selected ${d.playerName}${prospect?` (${prospect.pos}, ${prospect.school})`:''}  at pick #${pickNum} in round ${pick?.round||'?'} of the 2026 NFL Draft.${boardRank?` My board had them at #${boardRank} ${valueDesc}.`:''} ${needs.length?`The ${teamRaw} needed: ${needs.join(', ')}.`:''}\n\nUsing your knowledge of the ${teamRaw}'s current roster, players, and coach/scheme: Was this a good pick? How does this player fit? 3-4 sentences, direct and specific.`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json','x-api-key':getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:280,system:'You are an expert NFL draft analyst with deep knowledge of all 32 teams — rosters, coaches, schemes. Be direct, specific, football terminology.',messages:[{role:'user',content:prompt}]}),
+    });
+    const data = await res.json();
+    const answer = data.error?`⚠️ ${data.error.message}`:(data.content?.[0]?.text||'No response.');
+    el.innerHTML = `<div style="font-size:11px;color:var(--text);line-height:1.5;padding:6px 10px 8px;background:var(--surface2);border-left:2px solid var(--gold);margin:0 0 6px;">${answer}</div>`;
+  } catch(err) { el.innerHTML = `<span style="color:var(--red);font-size:11px;">⚠️ ${err.message}</span>`; }
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────
 loadProspects();
 loadMockDraft();
@@ -4033,6 +4290,8 @@ loadTiers();
 initFuturePicks();
 loadFuturePicks();
 loadLiveDraft();
+loadWatchlist();
+loadBoardLock();
 renderBoard();
 </script>
 </body>
