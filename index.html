@@ -1091,8 +1091,7 @@ async function autoFillMissingData() {
 
   const missing = PROSPECTS.filter(p =>
     !p.height || p.height === '—' ||
-    !p.weight || p.weight === 0 ||
-    !p.school || p.school === '—'
+    !p.weight || p.weight === 0
   );
   if (!missing.length) { showToast('✓ No missing data found'); return; }
 
@@ -1108,7 +1107,6 @@ async function autoFillMissingData() {
       const needs = [];
       if (!p.height || p.height === '—') needs.push('height');
       if (!p.weight || p.weight === 0) needs.push('weight');
-      if (!p.school || p.school === '—') needs.push('school');
       return { id: p.id, name: p.name, pos: p.pos, needs };
     });
 
@@ -1150,7 +1148,6 @@ Return: [{"id":1,"height":"6-3","weight":245,"school":"Alabama"},...]` }]
         const row = { name: p.name, pos: p.pos, fields: [] };
         if (r.height && (!p.height || p.height === '—')) { p.height = fixHeight(String(r.height)); row.fields.push(`Height: ${p.height}`); }
         if (r.weight && (!p.weight || p.weight === 0)) { p.weight = parseInt(r.weight) || 0; row.fields.push(`Weight: ${p.weight} lbs`); }
-        if (r.school && (!p.school || p.school === '—')) { p.school = r.school; row.fields.push(`School: ${p.school}`); }
         if (row.fields.length) changes.push(row);
       }
       if (i + 25 < missing.length) showToast(`Auto-filling… ${Math.min(i + 25, missing.length)}/${missing.length}`);
