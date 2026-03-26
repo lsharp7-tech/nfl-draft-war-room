@@ -893,8 +893,8 @@ function fixHeight(h) {
   const MONTH = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
   const m = String(h).match(/^(\d+)-([A-Za-z]{3})$/);
   if (m) {
-    const inches = MONTH[m[2].toLowerCase()];
-    if (inches !== undefined) return `${m[1]}-${inches}`;
+    const feet = MONTH[m[2].toLowerCase()];
+    if (feet !== undefined) return `${feet}-${m[1]}`;
   }
   return h;
 }
