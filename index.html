@@ -515,18 +515,10 @@
         placeholder="sk-ant-...">
       <div style="font-size:11px;color:var(--muted);margin-bottom:18px;">Get your key at console.anthropic.com → API Keys</div>
 
-      <div style="border-top:1px solid var(--border);padding-top:16px;">
-        <div class="ai-label">GitHub Token <span style="font-size:10px;color:var(--muted);font-weight:400;">(for Share Board)</span></div>
-        <input id="github-token-input" type="password"
-          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;margin-bottom:6px;"
-          placeholder="ghp_...">
-        <div style="font-size:11px;color:var(--muted);">GitHub → Settings → Developer settings → Personal access tokens (classic) → select <strong>gist</strong> scope only</div>
-      </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="clearApiKey()">Clear Anthropic</button>
-      <button class="btn btn-outline" onclick="clearGithubToken()">Clear GitHub</button>
-      <button class="btn btn-gold" onclick="saveAllKeys()">Save Keys</button>
+      <button class="btn btn-outline" onclick="clearApiKey()">Clear Key</button>
+      <button class="btn btn-gold" onclick="saveAllKeys()">Save Key</button>
     </div>
   </div>
 </div>
@@ -2024,22 +2016,18 @@ function confirmImport() {
 
 // ── API KEY ──────────────────────────────────────────────────────────
 function getApiKey() { return localStorage.getItem('anthropic_key') || ''; }
-function getGithubToken() { return localStorage.getItem('github_token') || ''; }
 
 function openKeyModal() {
   document.getElementById('api-key-input').value = getApiKey();
-  document.getElementById('github-token-input').value = getGithubToken();
   document.getElementById('key-modal').style.display = 'flex';
 }
 function closeKeyModal() { document.getElementById('key-modal').style.display = 'none'; }
 
 function saveAllKeys() {
   const ak = document.getElementById('api-key-input').value.trim();
-  const gh = document.getElementById('github-token-input').value.trim();
   if (ak) { localStorage.setItem('anthropic_key', ak); document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
-  if (gh) localStorage.setItem('github_token', gh);
   closeKeyModal();
-  showToast('✓ Keys saved');
+  showToast('✓ Key saved');
 }
 function saveApiKey() { saveAllKeys(); } // legacy alias
 function clearApiKey() {
@@ -2049,11 +2037,6 @@ function clearApiKey() {
   document.getElementById('key-btn').style.color = '';
   showToast('Anthropic key cleared');
 }
-function clearGithubToken() {
-  localStorage.removeItem('github_token');
-  document.getElementById('github-token-input').value = '';
-  showToast('GitHub token cleared');
-}
 
 // ── SHARE BOARD ───────────────────────────────────────────────────────
 let VIEWING_SHARED = false;
@@ -2062,42 +2045,35 @@ let _sharedProspects = null; // holds data for potential import
 function openShareModal() { document.getElementById('share-modal').style.display = 'flex'; }
 function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
 
-async function shareBoard() {
-  const token = getGithubToken();
-  if (!token) {
-    openKeyModal();
-    showToast('Add your GitHub token first to share your board');
-    return;
-  }
-  openShareModal();
-  document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Creating shareable link…</div>`;
-
+function shareBoard() {
   try {
-    const payload = { version: 1, sharedAt: new Date().toISOString(), prospects: PROSPECTS, tiers: TIERS };
-    const resp = await fetch('https://api.github.com/gists', {
-      method: 'POST',
-      headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: 'NFL Draft War Room – Big Board', public: true, files: { 'board.json': { content: JSON.stringify(payload) } } })
-    });
-    if (!resp.ok) { const e = await resp.json(); throw new Error(e.message || resp.status); }
-    const gist = await resp.json();
-    const url = `${location.origin}${location.pathname}?board=${gist.id}`;
+    const FIELDS = ['id','name','pos','school','height','weight','forty','arm','bench','vertical','broad','shuttle','cone','grade','myRank','espn','pff','pfsn','cbs','ras','notes'];
+    const payload = {
+      v: 1,
+      f: FIELDS,
+      p: PROSPECTS.map(p => FIELDS.map(f => p[f] ?? null)),
+      t: TIERS
+    };
+    const json = JSON.stringify(payload);
+    const bytes = new TextEncoder().encode(json);
+    let binary = '';
+    bytes.forEach(b => binary += String.fromCharCode(b));
+    const encoded = btoa(binary);
+    const url = `${location.origin}${location.pathname}#board=${encoded}`;
+    openShareModal();
     document.getElementById('share-modal-body').innerHTML = `
       <div style="padding:20px;">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your full board (read-only):</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your full board (read-only). Works in Gmail, text, anywhere:</div>
         <div style="display:flex;gap:8px;margin-bottom:10px;">
           <input id="share-url-out" readonly value="${url}"
             style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;">
           <button class="btn btn-gold" onclick="copyShareUrl()">Copy</button>
         </div>
-        <div style="font-size:11px;color:var(--muted);">The link is a secret URL — only people you share it with can access it.</div>
+        <div style="font-size:11px;color:var(--muted);">${PROSPECTS.length} prospects included · No account required</div>
       </div>`;
   } catch(e) {
-    document.getElementById('share-modal-body').innerHTML = `
-      <div style="padding:20px;">
-        <div style="color:var(--red);font-size:13px;margin-bottom:8px;">Failed to create link: ${e.message}</div>
-        <div style="font-size:11px;color:var(--muted);">Make sure your GitHub token has the <strong>gist</strong> scope.</div>
-      </div>`;
+    openShareModal();
+    document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">Failed to generate link: ${e.message}</div>`;
   }
 }
 
@@ -2126,9 +2102,7 @@ function importSharedBoard() {
   saveProspects();
   saveTiers();
   updateSharedBanner(false);
-  const url = new URL(location.href);
-  url.searchParams.delete('board');
-  history.replaceState({}, '', url);
+  history.replaceState({}, '', location.pathname + location.search);
   renderBoard();
   showToast(`✓ Board imported — ${PROSPECTS.length} prospects loaded`);
 }
@@ -4676,20 +4650,33 @@ function importAllData() {
 
 // ── INIT ─────────────────────────────────────────────────────────────
 (async () => {
-  const _sp = new URLSearchParams(location.search);
-  const boardId = _sp.get('board');
-  if (boardId) {
-    // Load a shared board from a public GitHub Gist (no auth needed)
+  const hashBoard = location.hash.startsWith('#board=') ? location.hash.slice(7) : null;
+  if (hashBoard) {
     try {
-      let data;
-      const resp = await fetch(`https://api.github.com/gists/${boardId}`);
-      if (!resp.ok) throw new Error('Board not found');
-      const gist = await resp.json();
-      data = JSON.parse(gist.files['board.json']?.content || '{}');
-      if (!data.prospects?.length) throw new Error('No prospects in shared board');
-      _sharedProspects = data;
-      PROSPECTS = data.prospects;
-      TIERS = data.tiers || [];
+      const binary = atob(hashBoard);
+      const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+      const json = new TextDecoder().decode(bytes);
+      const raw = JSON.parse(json);
+      // Support both compact {v,f,p,t} format and legacy full-object format
+      let prospects, tiers;
+      if (raw.f && raw.p) {
+        const fields = raw.f;
+        prospects = raw.p.map(row => {
+          const obj = {};
+          fields.forEach((f, i) => { if (row[i] != null) obj[f] = row[i]; });
+          return obj;
+        });
+        tiers = raw.t || [];
+      } else if (raw.prospects) {
+        prospects = raw.prospects;
+        tiers = raw.tiers || [];
+      } else {
+        throw new Error('Unrecognized board format');
+      }
+      if (!prospects.length) throw new Error('No prospects in shared board');
+      _sharedProspects = { prospects, tiers };
+      PROSPECTS = prospects;
+      TIERS = tiers;
       VIEWING_SHARED = true;
     } catch(e) {
       showToast('⚠️ Could not load shared board — showing your own');
