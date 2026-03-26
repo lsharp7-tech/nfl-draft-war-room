@@ -331,6 +331,8 @@
     <button class="btn btn-outline" onclick="openAddProspectModal()">➕ Add Prospect</button>
     <button class="btn btn-outline" onclick="openImportModal()">⬆ Import Players</button>
     <button class="btn btn-outline" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="btn btn-outline" onclick="exportAllData()" title="Back up all data to a JSON file">💾 Backup</button>
+    <button class="btn btn-outline" onclick="importAllData()" title="Restore from a backup JSON file">📂 Restore</button>
     <button class="btn btn-outline" onclick="openKeyModal()" id="key-btn">🔑 API Key</button>
     <button class="btn btn-outline" onclick="deduplicateProspects()">🧹 Dedupe</button>
     <button class="btn btn-outline" onclick="resetRankings()">Reset Order</button>
@@ -4281,6 +4283,95 @@ async function liveAskOtis(pickNum) {
     const answer = data.error?`⚠️ ${data.error.message}`:(data.content?.[0]?.text||'No response.');
     el.innerHTML = `<div style="font-size:11px;color:var(--text);line-height:1.5;padding:6px 10px 8px;background:var(--surface2);border-left:2px solid var(--gold);margin:0 0 6px;">${answer}</div>`;
   } catch(err) { el.innerHTML = `<span style="color:var(--red);font-size:11px;">⚠️ ${err.message}</span>`; }
+}
+
+// ── BACKUP / RESTORE ─────────────────────────────────────────────────
+function exportAllData() {
+  const data = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    prospects: PROSPECTS,
+    mockPicks: MOCK_PICKS.map(p => ({ id: p.playerId || null, sim: p.simulated || false, owner: p.owner || null })),
+    tiers: TIERS,
+    watchlist: [...WATCHLIST],
+    boardLocked: BOARD_LOCKED,
+    liveDraft: { picks: LIVE_DRAFT_PICKS, currentPick: liveCurrentPick },
+    savedDrafts: getSavedDrafts(),
+    futurePicks: FUTURE_PICKS.filter(p => p.owner).map(p => ({ id: p.id, owner: p.owner })),
+  };
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(data, null, 2));
+  a.download = `nfl-war-room-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  showToast('✓ Full backup exported');
+}
+
+function importAllData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const data = JSON.parse(evt.target.result);
+        if (!Array.isArray(data.prospects)) { showToast('⚠️ Invalid backup file'); return; }
+        const date = data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'unknown date';
+        if (!confirm(`Restore backup from ${date}?\n\n${data.prospects.length} prospects, ${data.mockPicks?.filter(p=>p.id)?.length||0} mock picks, ${Object.keys(data.liveDraft?.picks||{}).length} live picks.\n\nThis will replace ALL current data.`)) return;
+
+        // Prospects
+        PROSPECTS.length = 0;
+        PROSPECTS.push(...data.prospects);
+        saveProspects();
+
+        // Mock draft
+        if (Array.isArray(data.mockPicks)) {
+          data.mockPicks.forEach((d, i) => {
+            if (!MOCK_PICKS[i]) return;
+            MOCK_PICKS[i].playerId = d.id || null;
+            MOCK_PICKS[i].simulated = d.sim || false;
+            MOCK_PICKS[i].owner = d.owner || null;
+          });
+          saveMockDraft();
+        }
+
+        // Tiers
+        if (Array.isArray(data.tiers)) { TIERS = data.tiers; saveTiers(); }
+
+        // Watchlist
+        if (Array.isArray(data.watchlist)) { WATCHLIST = new Set(data.watchlist); saveWatchlist(); }
+
+        // Board lock
+        if (data.boardLocked !== undefined) { BOARD_LOCKED = !!data.boardLocked; saveBoardLock(); }
+
+        // Live draft
+        if (data.liveDraft) {
+          LIVE_DRAFT_PICKS = data.liveDraft.picks || {};
+          liveCurrentPick = data.liveDraft.currentPick || 1;
+          saveLiveDraft();
+        }
+
+        // Saved drafts
+        if (data.savedDrafts) { try { localStorage.setItem('nfl_saved_drafts', JSON.stringify(data.savedDrafts)); } catch(e) {} }
+
+        // Future picks
+        if (Array.isArray(data.futurePicks)) {
+          initFuturePicks();
+          data.futurePicks.forEach(d => { const fp = FUTURE_PICKS.find(p => p.id === d.id); if (fp) fp.owner = d.owner; });
+          saveFuturePicks();
+        }
+
+        renderBoard();
+        showToast(`✅ Backup restored — ${data.prospects.length} prospects loaded`);
+      } catch(err) {
+        showToast('⚠️ Failed to read backup file');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────
