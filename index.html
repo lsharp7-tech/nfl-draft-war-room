@@ -1099,7 +1099,7 @@ async function autoFillMissingData() {
   const batchCount = Math.ceil(missing.length / 25);
   if (!confirm(`Auto-fill missing height, weight, and school for ${missing.length} prospects? This will make ${batchCount} API call${batchCount > 1 ? 's' : ''}.`)) return;
 
-  let filled = 0;
+  const changes = [];
   showToast(`Auto-filling ${missing.length} prospects…`);
 
   for (let i = 0; i < missing.length; i += 25) {
@@ -1147,9 +1147,11 @@ Return: [{"id":1,"height":"6-3","weight":245,"school":"Alabama"},...]` }]
       for (const r of results) {
         const p = PROSPECTS.find(x => x.id === r.id);
         if (!p) continue;
-        if (r.height && (!p.height || p.height === '—')) { p.height = fixHeight(String(r.height)); filled++; }
-        if (r.weight && (!p.weight || p.weight === 0)) { p.weight = parseInt(r.weight) || 0; filled++; }
-        if (r.school && (!p.school || p.school === '—')) { p.school = r.school; filled++; }
+        const row = { name: p.name, pos: p.pos, fields: [] };
+        if (r.height && (!p.height || p.height === '—')) { p.height = fixHeight(String(r.height)); row.fields.push(`Height: ${p.height}`); }
+        if (r.weight && (!p.weight || p.weight === 0)) { p.weight = parseInt(r.weight) || 0; row.fields.push(`Weight: ${p.weight} lbs`); }
+        if (r.school && (!p.school || p.school === '—')) { p.school = r.school; row.fields.push(`School: ${p.school}`); }
+        if (row.fields.length) changes.push(row);
       }
       if (i + 25 < missing.length) showToast(`Auto-filling… ${Math.min(i + 25, missing.length)}/${missing.length}`);
     } catch(e) {
@@ -1159,7 +1161,20 @@ Return: [{"id":1,"height":"6-3","weight":245,"school":"Alabama"},...]` }]
 
   saveProspects();
   renderBoard();
-  showToast(`✓ Auto-fill done — ${filled} fields updated`);
+
+  // Show review modal
+  openShareModal();
+  document.getElementById('share-modal-body').innerHTML = `
+    <div style="padding:16px;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">${changes.length} prospects updated — review and fix any errors by clicking the prospect on the board:</div>
+      <div style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+        ${changes.map(c => `
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px;">${c.name} <span style="color:var(--muted);font-weight:400;">${c.pos}</span></div>
+            <div style="font-size:11px;color:var(--gold);">${c.fields.join(' · ')}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
 }
 
 function deduplicateProspects() {
