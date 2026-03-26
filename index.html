@@ -349,6 +349,7 @@
         <button onclick="deduplicateProspects()">🧹 Deduplicate</button>
         <button onclick="resetRankings()">↺ Reset Order</button>
         <button onclick="autoFillMissingData()">🤖 Auto-Fill Missing Data</button>
+        <button onclick="clearAllSchools()">🏫 Clear All Schools</button>
         <hr>
         <button onclick="shareBoard()">🔗 Share Board</button>
       </div>
@@ -1172,6 +1173,16 @@ Return: [{"id":1,"height":"6-3","weight":245,"school":"Alabama"},...]` }]
           </div>`).join('')}
       </div>
     </div>`;
+}
+
+function clearAllSchools() {
+  const count = PROSPECTS.filter(p => p.school && p.school !== '—').length;
+  if (!count) { showToast('No schools to clear'); return; }
+  if (!confirm(`Clear school for all ${count} prospects? You can re-import your CSV afterwards to restore the correct ones.`)) return;
+  PROSPECTS.forEach(p => { p.school = '—'; });
+  saveProspects();
+  renderBoard();
+  showToast(`✓ Cleared schools for ${count} prospects`);
 }
 
 function deduplicateProspects() {
