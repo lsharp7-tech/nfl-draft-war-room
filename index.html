@@ -2077,15 +2077,11 @@ async function shareBoard() {
     const resp = await fetch('https://api.github.com/gists', {
       method: 'POST',
       headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: 'NFL Draft War Room – Big Board', public: false, files: { 'board.json': { content: JSON.stringify(payload) } } })
+      body: JSON.stringify({ description: 'NFL Draft War Room – Big Board', public: true, files: { 'board.json': { content: JSON.stringify(payload) } } })
     });
     if (!resp.ok) { const e = await resp.json(); throw new Error(e.message || resp.status); }
     const gist = await resp.json();
-    // Extract username from the raw_url GitHub returns (most reliable)
-    const rawUrl = gist.files?.['board.json']?.raw_url || '';
-    const userMatch = rawUrl.match(/gist\.githubusercontent\.com\/([^/]+)\//);
-    const user = userMatch?.[1] || gist.owner?.login || '';
-    const url = `${location.origin}${location.pathname}?board=${gist.id}${user ? '&user=' + user : ''}`;
+    const url = `${location.origin}${location.pathname}?board=${gist.id}`;
     document.getElementById('share-modal-body').innerHTML = `
       <div style="padding:20px;">
         <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your full board (read-only):</div>
@@ -4682,23 +4678,14 @@ function importAllData() {
 (async () => {
   const _sp = new URLSearchParams(location.search);
   const boardId = _sp.get('board');
-  const boardUser = _sp.get('user');
   if (boardId) {
-    // Load a shared board — use raw gist URL (no auth needed) when user is known
+    // Load a shared board from a public GitHub Gist (no auth needed)
     try {
       let data;
-      if (boardUser) {
-        // Raw URL: no auth required, public CDN
-        const raw = await fetch(`https://gist.githubusercontent.com/${boardUser}/${boardId}/raw/board.json`);
-        if (!raw.ok) throw new Error('Board not found');
-        data = await raw.json();
-      } else {
-        // Fallback: GitHub API (may fail for secret gists without auth)
-        const resp = await fetch(`https://api.github.com/gists/${boardId}`);
-        if (!resp.ok) throw new Error('Gist not found');
-        const gist = await resp.json();
-        data = JSON.parse(gist.files['board.json']?.content || '{}');
-      }
+      const resp = await fetch(`https://api.github.com/gists/${boardId}`);
+      if (!resp.ok) throw new Error('Board not found');
+      const gist = await resp.json();
+      data = JSON.parse(gist.files['board.json']?.content || '{}');
       if (!data.prospects?.length) throw new Error('No prospects in shared board');
       _sharedProspects = data;
       PROSPECTS = data.prospects;
