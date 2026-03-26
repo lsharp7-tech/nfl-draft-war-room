@@ -2014,9 +2014,9 @@ function exportCSV() {
     p.ras > 0 ? p.ras.toFixed(2) : '',
     computeGrade(p), p.espn < 999 ? p.espn : '', p.pff < 999 ? p.pff : '',
     p.pfsn < 999 ? p.pfsn : '', p.cbs < 999 ? p.cbs : '',
-    (p.notes || '').replace(/,/g, ';')
+    (p.notes || '')
   ]);
-  const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'nfl-draft-2026-bigboard.csv';
@@ -3583,9 +3583,8 @@ function toggleTierZones() {
 function addTierAfter(afterId) {
   const name = prompt('Tier name (e.g. "Round 1", "Elite"):', 'Tier');
   if (!name) return;
-  // Don't add a tier after the last prospect
   const p = PROSPECTS.find(x => x.id == afterId);
-  if (!p || PROSPECTS.indexOf(p) >= PROSPECTS.length - 1) return;
+  if (!p || PROSPECTS.indexOf(p) >= PROSPECTS.length - 1) { showToast("Can't add a tier break after the last prospect"); return; }
   TIERS = TIERS.filter(t => t.afterId != afterId);
   TIERS.push({ name, afterId: p.id });
   saveTiers();
@@ -3671,7 +3670,7 @@ function getCombineFilterFn() {
   const heightMin = heightToInches(heightMinRaw);
   const rasMin = parseFloat(document.getElementById('cf-ras')?.value);
   return p => {
-    if (!isNaN(fortyMax) && fortyMax > 0 && (p.forty === '—' || parseFloat(p.forty) > fortyMax)) return false;
+    if (!isNaN(fortyMax) && fortyMax > 0 && p.forty !== '—' && parseFloat(p.forty) > fortyMax) return false;
     if (!isNaN(weightMin) && weightMin > 0 && p.weight < weightMin) return false;
     if (heightMin > 0 && heightToInches(p.height) < heightMin) return false;
     if (!isNaN(rasMin) && rasMin > 0 && p.ras < rasMin) return false;
@@ -3860,6 +3859,7 @@ function renderLiveEntryArea() {
     <input class="live-search" id="live-search-input" type="text"
       placeholder="${selectedProspect?'Change player...':'Search by name or position...'}"
       oninput="renderLiveEntryArea()"
+      onkeydown="if(event.key==='Enter')submitLivePick()"
       value="${input?.value||''}">
     ${showList && pool.length ? `<div class="live-prospect-list">${prospectRows}</div>` : ''}
     ${showList && !pool.length && query ? `<div style="padding:8px 0;font-size:11px;color:var(--muted);">No matches — will save as free-form entry</div>` : ''}
