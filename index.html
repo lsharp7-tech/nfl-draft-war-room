@@ -580,10 +580,12 @@
     <div style="display:flex;align-items:center;gap:12px;">
       <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--gold);">📺 DRAFT NIGHT</span>
       <span id="live-progress-label" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
+      <span id="live-auto-status"></span>
     </div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-outline" style="font-size:12px;" onclick="openMockVsReal()">📋 vs Mock</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openLiveReportCard()">📊 Real Grades</button>
+      <button id="go-live-btn" class="btn btn-outline" style="font-size:12px;border-color:#27ae60;color:#27ae60;" onclick="toggleLivePolling()">▶ Go Live</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="undoLivePick()">↩ Undo</button>
       <button class="btn btn-red" style="font-size:12px;" onclick="resetLiveDraft()">↺ Reset</button>
     </div>
@@ -1424,6 +1426,8 @@ function switchView(view, btn) {
   } else if (view === 'live') {
     document.getElementById('live-draft-view').style.display = 'block';
     renderLiveDraft();
+  } else {
+    if (livePollingActive) stopLivePolling();
   }
 }
 
@@ -3951,6 +3955,119 @@ function resetLiveDraft() {
   liveSelectedReaction = null;
   saveLiveDraft();
   renderLiveDraft();
+}
+
+// ── LIVE AUTO-POLLING (ESPN API) ──────────────────────────────────────
+let livePollingActive = false;
+let livePollingInterval = null;
+let liveLastUpdate = null;
+
+function toggleLivePolling() {
+  livePollingActive ? stopLivePolling() : startLivePolling();
+}
+
+function startLivePolling() {
+  livePollingActive = true;
+  updateLiveAutoStatus('connecting…');
+  fetchLivePicksESPN();
+  livePollingInterval = setInterval(fetchLivePicksESPN, 60000);
+  const btn = document.getElementById('go-live-btn');
+  if (btn) { btn.textContent = '⏹ Stop Live'; btn.style.background = '#27ae60'; btn.style.color = '#000'; btn.style.borderColor = '#27ae60'; }
+}
+
+function stopLivePolling() {
+  livePollingActive = false;
+  clearInterval(livePollingInterval);
+  livePollingInterval = null;
+  updateLiveAutoStatus('');
+  const btn = document.getElementById('go-live-btn');
+  if (btn) { btn.textContent = '▶ Go Live'; btn.style.background = ''; btn.style.color = '#27ae60'; btn.style.borderColor = '#27ae60'; }
+}
+
+function updateLiveAutoStatus(msg) {
+  const el = document.getElementById('live-auto-status');
+  if (!el) return;
+  if (!msg) { el.innerHTML = ''; return; }
+  const dot = livePollingActive && msg !== 'connecting…' ? '●' : '○';
+  el.innerHTML = `<span style="font-size:11px;color:#27ae60;font-family:'DM Mono',monospace;">${dot} LIVE · ${msg}</span>`;
+}
+
+function matchProspectByName(name) {
+  if (!name) return null;
+  const n = name.toLowerCase().trim();
+  let m = PROSPECTS.find(p => p.name.toLowerCase() === n);
+  if (m) return m;
+  const parts = n.split(' ');
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1];
+    const first0 = parts[0][0];
+    m = PROSPECTS.find(p => {
+      const pp = p.name.toLowerCase().split(' ');
+      return pp[pp.length - 1] === last && pp[0][0] === first0;
+    });
+  }
+  return m || null;
+}
+
+async function fetchLivePicksESPN() {
+  const YEAR = 2026;
+  let newCount = 0;
+  try {
+    for (let round = 1; round <= 7; round++) {
+      const roundData = await fetch(
+        `https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/${YEAR}/draft/rounds/${round}`
+      ).then(r => r.ok ? r.json() : null).catch(() => null);
+      if (!roundData) continue;
+
+      // Picks may be inline or in a nested collection
+      let pickItems = [];
+      if (Array.isArray(roundData.picks)) {
+        pickItems = roundData.picks;
+      } else if (roundData.picks?.items) {
+        pickItems = roundData.picks.items;
+      } else if (roundData.picks?.$ref) {
+        const col = await fetch(roundData.picks.$ref + '?limit=50').then(r => r.ok ? r.json() : null).catch(() => null);
+        pickItems = col?.items || [];
+      }
+      if (!pickItems.length) break; // Round not started yet
+
+      // Resolve $refs concurrently
+      const resolved = await Promise.all(
+        pickItems.map(p => p.$ref ? fetch(p.$ref).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(p))
+      );
+
+      for (const p of resolved) {
+        if (!p) continue;
+        const pickNum = p.overallNumber || p.overall;
+        if (!pickNum || LIVE_DRAFT_PICKS[pickNum]) continue; // skip already recorded
+
+        let playerName = p.athlete?.displayName || p.athlete?.fullName;
+        if (!playerName && p.athlete?.$ref) {
+          const ath = await fetch(p.athlete.$ref).then(r => r.ok ? r.json() : null).catch(() => null);
+          playerName = ath?.displayName || ath?.fullName;
+        }
+        if (!playerName) continue;
+
+        const team = p.team?.abbreviation || '';
+        const matched = matchProspectByName(playerName);
+        LIVE_DRAFT_PICKS[pickNum] = { playerName, playerId: matched?.id || null, reaction: null, team, autoFetched: true };
+
+        if (pickNum >= liveCurrentPick) {
+          liveCurrentPick = pickNum + 1;
+          while (liveCurrentPick <= MOCK_PICKS.length && LIVE_DRAFT_PICKS[liveCurrentPick]) liveCurrentPick++;
+        }
+        showToast(`🏈 #${pickNum}: ${playerName} → ${team || '?'}`);
+        newCount++;
+      }
+    }
+
+    if (newCount > 0) { saveLiveDraft(); renderLiveDraft(); }
+    liveLastUpdate = Date.now();
+    updateLiveAutoStatus(newCount > 0 ? `${newCount} new pick${newCount > 1 ? 's' : ''}` : 'up to date');
+  } catch(e) {
+    console.error('ESPN poll error:', e);
+    updateLiveAutoStatus('error');
+  }
 }
 
 function renderLiveFeed() {
