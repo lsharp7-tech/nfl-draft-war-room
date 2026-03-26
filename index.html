@@ -348,12 +348,21 @@
         <hr>
         <button onclick="deduplicateProspects()">🧹 Deduplicate</button>
         <button onclick="resetRankings()">↺ Reset Order</button>
+        <hr>
+        <button onclick="shareBoard()">🔗 Share Board</button>
       </div>
     </div>
     <button class="btn btn-outline" onclick="openKeyModal()" id="key-btn">🔑 API Key</button>
     <button class="btn btn-gold" onclick="openAITab()">🐶 Ask Otis</button>
   </div>
 </header>
+
+<!-- SHARED BOARD BANNER -->
+<div id="shared-banner" style="display:none;background:#0a1a0a;border-bottom:1px solid var(--green);padding:8px 20px;align-items:center;gap:12px;font-size:12px;flex-shrink:0;">
+  <span style="color:var(--green);font-weight:600;">👁 Viewing a shared board · Read-only</span>
+  <button class="btn btn-outline" style="font-size:11px;padding:4px 10px;border-color:var(--green);color:var(--green);" onclick="importSharedBoard()">⬇ Import to My Board</button>
+  <button onclick="dismissSharedBoard()" style="background:none;border:none;color:var(--muted);cursor:pointer;margin-left:auto;font-size:16px;line-height:1;">✕</button>
+</div>
 
 <div class="tabs">
   <div class="tab active" onclick="switchView('board',this)">📋 My Big Board</div>
@@ -496,23 +505,40 @@
 <div id="key-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeKeyModal()">
   <div class="modal-box" style="max-width:440px;">
     <div class="modal-header">
-      <h2>🔑 Anthropic API Key</h2>
+      <h2>🔑 API Keys</h2>
       <button class="modal-close" onclick="closeKeyModal()">✕</button>
     </div>
     <div class="modal-body">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
-        Your key is stored only in your browser (localStorage) and never sent anywhere except directly to Anthropic.
-      </div>
-      <div class="ai-label">API Key</div>
+      <div class="ai-label">Anthropic API Key <span style="font-size:10px;color:var(--muted);font-weight:400;">(for Otis)</span></div>
       <input id="api-key-input" type="password"
-        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;margin-bottom:8px;"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;margin-bottom:6px;"
         placeholder="sk-ant-...">
-      <div style="font-size:11px;color:var(--muted);">Get your key at console.anthropic.com → API Keys</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:18px;">Get your key at console.anthropic.com → API Keys</div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px;">
+        <div class="ai-label">GitHub Token <span style="font-size:10px;color:var(--muted);font-weight:400;">(for Share Board)</span></div>
+        <input id="github-token-input" type="password"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;margin-bottom:6px;"
+          placeholder="ghp_...">
+        <div style="font-size:11px;color:var(--muted);">GitHub → Settings → Developer settings → Personal access tokens (classic) → select <strong>gist</strong> scope only</div>
+      </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="clearApiKey()">Clear Key</button>
-      <button class="btn btn-gold" onclick="saveApiKey()">Save Key</button>
+      <button class="btn btn-outline" onclick="clearApiKey()">Clear Anthropic</button>
+      <button class="btn btn-outline" onclick="clearGithubToken()">Clear GitHub</button>
+      <button class="btn btn-gold" onclick="saveAllKeys()">Save Keys</button>
     </div>
+  </div>
+</div>
+
+<!-- SHARE BOARD MODAL -->
+<div id="share-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeShareModal()">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-header">
+      <h2>🔗 Share Board</h2>
+      <button class="modal-close" onclick="closeShareModal()">✕</button>
+    </div>
+    <div id="share-modal-body" class="modal-body"></div>
   </div>
 </div>
 
@@ -1998,26 +2024,113 @@ function confirmImport() {
 
 // ── API KEY ──────────────────────────────────────────────────────────
 function getApiKey() { return localStorage.getItem('anthropic_key') || ''; }
+function getGithubToken() { return localStorage.getItem('github_token') || ''; }
+
 function openKeyModal() {
   document.getElementById('api-key-input').value = getApiKey();
+  document.getElementById('github-token-input').value = getGithubToken();
   document.getElementById('key-modal').style.display = 'flex';
 }
 function closeKeyModal() { document.getElementById('key-modal').style.display = 'none'; }
-function saveApiKey() {
-  const key = document.getElementById('api-key-input').value.trim();
-  if (!key) { showToast('Enter a key first'); return; }
-  localStorage.setItem('anthropic_key', key);
-  document.getElementById('key-btn').style.borderColor = 'var(--green)';
-  document.getElementById('key-btn').style.color = 'var(--green)';
+
+function saveAllKeys() {
+  const ak = document.getElementById('api-key-input').value.trim();
+  const gh = document.getElementById('github-token-input').value.trim();
+  if (ak) { localStorage.setItem('anthropic_key', ak); document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
+  if (gh) localStorage.setItem('github_token', gh);
   closeKeyModal();
-  showToast('✓ API key saved');
+  showToast('✓ Keys saved');
 }
+function saveApiKey() { saveAllKeys(); } // legacy alias
 function clearApiKey() {
   localStorage.removeItem('anthropic_key');
   document.getElementById('api-key-input').value = '';
   document.getElementById('key-btn').style.borderColor = '';
   document.getElementById('key-btn').style.color = '';
-  showToast('Key cleared');
+  showToast('Anthropic key cleared');
+}
+function clearGithubToken() {
+  localStorage.removeItem('github_token');
+  document.getElementById('github-token-input').value = '';
+  showToast('GitHub token cleared');
+}
+
+// ── SHARE BOARD ───────────────────────────────────────────────────────
+let VIEWING_SHARED = false;
+let _sharedProspects = null; // holds data for potential import
+
+function openShareModal() { document.getElementById('share-modal').style.display = 'flex'; }
+function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
+
+async function shareBoard() {
+  const token = getGithubToken();
+  if (!token) {
+    openKeyModal();
+    showToast('Add your GitHub token first to share your board');
+    return;
+  }
+  openShareModal();
+  document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Creating shareable link…</div>`;
+
+  try {
+    const payload = { version: 1, sharedAt: new Date().toISOString(), prospects: PROSPECTS, tiers: TIERS };
+    const resp = await fetch('https://api.github.com/gists', {
+      method: 'POST',
+      headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: 'NFL Draft War Room – Big Board', public: false, files: { 'board.json': { content: JSON.stringify(payload) } } })
+    });
+    if (!resp.ok) { const e = await resp.json(); throw new Error(e.message || resp.status); }
+    const gist = await resp.json();
+    const url = `${location.origin}${location.pathname}?board=${gist.id}`;
+    document.getElementById('share-modal-body').innerHTML = `
+      <div style="padding:20px;">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your full board (read-only):</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input id="share-url-out" readonly value="${url}"
+            style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;">
+          <button class="btn btn-gold" onclick="copyShareUrl()">Copy</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);">The link is a secret URL — only people you share it with can access it.</div>
+      </div>`;
+  } catch(e) {
+    document.getElementById('share-modal-body').innerHTML = `
+      <div style="padding:20px;">
+        <div style="color:var(--red);font-size:13px;margin-bottom:8px;">Failed to create link: ${e.message}</div>
+        <div style="font-size:11px;color:var(--muted);">Make sure your GitHub token has the <strong>gist</strong> scope.</div>
+      </div>`;
+  }
+}
+
+function copyShareUrl() {
+  const el = document.getElementById('share-url-out');
+  if (!el) return;
+  navigator.clipboard.writeText(el.value).then(() => showToast('✓ Link copied to clipboard!')).catch(() => { el.select(); document.execCommand('copy'); showToast('✓ Copied!'); });
+}
+
+function updateSharedBanner(show) {
+  const el = document.getElementById('shared-banner');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
+
+function dismissSharedBoard() {
+  updateSharedBanner(false);
+}
+
+function importSharedBoard() {
+  if (!_sharedProspects) return;
+  if (!confirm(`Import this shared board? This will replace your current ${PROSPECTS.length} prospects.`)) return;
+  VIEWING_SHARED = false;
+  PROSPECTS = _sharedProspects.prospects || PROSPECTS;
+  TIERS = _sharedProspects.tiers || TIERS;
+  _sharedProspects = null;
+  saveProspects();
+  saveTiers();
+  updateSharedBanner(false);
+  const url = new URL(location.href);
+  url.searchParams.delete('board');
+  history.replaceState({}, '', url);
+  renderBoard();
+  showToast(`✓ Board imported — ${PROSPECTS.length} prospects loaded`);
 }
 
 // ── EXPORT CSV ───────────────────────────────────────────────────────
@@ -3258,6 +3371,7 @@ Using your knowledge of the ${team}'s current roster, key players, and head coac
 
 // ── PERSISTENCE ──────────────────────────────────────────────────────
 function saveProspects() {
+  if (VIEWING_SHARED) return;
   try { localStorage.setItem('nfl_prospects', JSON.stringify(PROSPECTS)); } catch(e) {}
 }
 
@@ -4561,15 +4675,39 @@ function importAllData() {
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────
-loadProspects();
-loadMockDraft();
-loadTiers();
-initFuturePicks();
-loadFuturePicks();
-loadLiveDraft();
-loadWatchlist();
-loadBoardLock();
-renderBoard();
+(async () => {
+  const boardId = new URLSearchParams(location.search).get('board');
+  if (boardId) {
+    // Load a shared board from GitHub Gist
+    try {
+      const resp = await fetch(`https://api.github.com/gists/${boardId}`);
+      if (!resp.ok) throw new Error('Gist not found');
+      const gist = await resp.json();
+      const data = JSON.parse(gist.files['board.json']?.content || '{}');
+      if (!data.prospects?.length) throw new Error('No prospects in shared board');
+      _sharedProspects = data;
+      PROSPECTS = data.prospects;
+      TIERS = data.tiers || [];
+      VIEWING_SHARED = true;
+    } catch(e) {
+      showToast('⚠️ Could not load shared board — showing your own');
+      loadProspects();
+      loadTiers();
+    }
+  } else {
+    loadProspects();
+    loadTiers();
+  }
+  loadMockDraft();
+  initFuturePicks();
+  loadFuturePicks();
+  loadLiveDraft();
+  loadWatchlist();
+  loadBoardLock();
+  renderBoard();
+  if (VIEWING_SHARED) updateSharedBanner(true);
+  if (getApiKey()) { document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
+})();
 </script>
 </body>
 </html>
