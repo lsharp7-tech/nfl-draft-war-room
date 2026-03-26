@@ -887,6 +887,17 @@ function heightToInches(h) {
   const m = h.match(/^(\d+)-(\d+)$/);
   return m ? parseInt(m[1]) * 12 + parseInt(m[2]) : 0;
 }
+// Fix Excel auto-converting "6-2" → "6-Feb", "5-9" → "5-Sep", etc.
+function fixHeight(h) {
+  if (!h) return h;
+  const MONTH = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+  const m = String(h).match(/^(\d+)-([A-Za-z]{3})$/);
+  if (m) {
+    const inches = MONTH[m[2].toLowerCase()];
+    if (inches !== undefined) return `${m[1]}-${inches}`;
+  }
+  return h;
+}
 
 function computeGrade(p) {
   const expertRanks = [p.espn, p.pff, p.pfsn, p.cbs].filter(r => r > 0 && r < 999);
@@ -1683,7 +1694,7 @@ function rowsToProspects(rows, mapping, skipPosFilter) {
       id: idCounter++, name,
       pos: normalPos,
       school: get(row, 'school') || '—',
-      height: get(row, 'height') || '—',
+      height: fixHeight(get(row, 'height')) || '—',
       weight: parseInt(get(row, 'weight')) || 0,
       forty: get(row, 'forty') || '—',
       arm: get(row, 'arm') || '—',
@@ -3383,7 +3394,7 @@ function loadProspects() {
       const data = JSON.parse(saved);
       if (Array.isArray(data) && data.length > 0) {
         PROSPECTS.length = 0;
-        PROSPECTS.push(...data);
+        PROSPECTS.push(...data.map(p => ({ ...p, height: fixHeight(p.height) })));
       }
     }
   } catch(e) {}
