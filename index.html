@@ -3929,37 +3929,32 @@ function clearAllTiers() {
 }
 
 function autoTier() {
-  if (!confirm('This will replace any existing tiers with auto-detected ones. Continue?')) return;
+  if (!confirm('This will replace any existing tiers. Continue?')) return;
   const n = PROSPECTS.length;
-  if (n < 6) { showToast('Not enough prospects to tier'); return; }
+  if (n < 10) { showToast('Not enough prospects to tier'); return; }
 
   const grades = PROSPECTS.map(p => computeGrade(p));
 
-  // Anchor break positions at NFL draft round boundaries.
-  // For each anchor, snap to the largest grade drop within ±10 spots.
-  const anchors = [32, 64, 100, 136, 176, 219, 259, 320];
-  const tierLabels = ['Round 2', 'Round 3', 'Round 4', 'Day 3', 'Round 6', 'Round 7', 'Priority UDFA', 'Deep Sleepers'];
-  const WINDOW = 10;
+  // 5 tiers: Blue Chippers (top), then 4 breaks snapped to nearest grade cliff
+  const anchors = [
+    { pos: 5,   name: 'Round 1 Picks' },
+    { pos: 32,  name: 'Day 2 Picks' },
+    { pos: 100, name: 'Day 3 Picks' },
+    { pos: 259, name: 'Undrafted Free Agents' },
+  ];
+  const WINDOW = 8;
 
   const breakPoints = [];
-  for (let a = 0; a < anchors.length; a++) {
-    const center = anchors[a];
-    if (center >= n - 3) break; // beyond board length
-
-    const lo = Math.max(1, center - WINDOW);
-    const hi = Math.min(n - 2, center + WINDOW);
-
-    // Find the largest grade drop in this window
-    let bestDrop = -Infinity, bestIdx = center;
+  for (const anchor of anchors) {
+    if (anchor.pos >= n - 2) break;
+    const lo = Math.max(1, anchor.pos - WINDOW);
+    const hi = Math.min(n - 2, anchor.pos + WINDOW);
+    let bestDrop = -Infinity, bestIdx = anchor.pos;
     for (let j = lo; j <= hi; j++) {
       const drop = grades[j - 1] - grades[j];
       if (drop > bestDrop) { bestDrop = drop; bestIdx = j; }
     }
-
-    // Don't add if too close to previous break (min 5 apart)
-    if (!breakPoints.length || bestIdx - breakPoints[breakPoints.length - 1] >= 5) {
-      breakPoints.push({ idx: bestIdx, name: tierLabels[a] });
-    }
+    breakPoints.push({ idx: bestIdx, name: anchor.name });
   }
 
   TIERS = breakPoints.map(bp => ({
@@ -3972,7 +3967,7 @@ function autoTier() {
   const btn = document.getElementById('tiers-toggle-btn');
   if (btn) btn.classList.remove('active');
   renderBoard();
-  showToast(`Auto-tiered into ${TIERS.length + 1} tiers`);
+  showToast(`✓ Tiered: Blue Chippers · Round 1 · Day 2 · Day 3 · UDFAs`);
 }
 
 // ── COMBINE FILTERS ────────────────────────────────────────────────────
