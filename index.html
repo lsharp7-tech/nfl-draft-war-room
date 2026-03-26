@@ -2081,7 +2081,8 @@ async function shareBoard() {
     });
     if (!resp.ok) { const e = await resp.json(); throw new Error(e.message || resp.status); }
     const gist = await resp.json();
-    const url = `${location.origin}${location.pathname}?board=${gist.id}`;
+    const user = gist.owner?.login || '';
+    const url = `${location.origin}${location.pathname}?board=${gist.id}&user=${user}`;
     document.getElementById('share-modal-body').innerHTML = `
       <div style="padding:20px;">
         <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your full board (read-only):</div>
@@ -4676,14 +4677,25 @@ function importAllData() {
 
 // ── INIT ─────────────────────────────────────────────────────────────
 (async () => {
-  const boardId = new URLSearchParams(location.search).get('board');
+  const _sp = new URLSearchParams(location.search);
+  const boardId = _sp.get('board');
+  const boardUser = _sp.get('user');
   if (boardId) {
-    // Load a shared board from GitHub Gist
+    // Load a shared board — use raw gist URL (no auth needed) when user is known
     try {
-      const resp = await fetch(`https://api.github.com/gists/${boardId}`);
-      if (!resp.ok) throw new Error('Gist not found');
-      const gist = await resp.json();
-      const data = JSON.parse(gist.files['board.json']?.content || '{}');
+      let data;
+      if (boardUser) {
+        // Raw URL: no auth required, public CDN
+        const raw = await fetch(`https://gist.githubusercontent.com/${boardUser}/${boardId}/raw/board.json`);
+        if (!raw.ok) throw new Error('Board not found');
+        data = await raw.json();
+      } else {
+        // Fallback: GitHub API (may fail for secret gists without auth)
+        const resp = await fetch(`https://api.github.com/gists/${boardId}`);
+        if (!resp.ok) throw new Error('Gist not found');
+        const gist = await resp.json();
+        data = JSON.parse(gist.files['board.json']?.content || '{}');
+      }
       if (!data.prospects?.length) throw new Error('No prospects in shared board');
       _sharedProspects = data;
       PROSPECTS = data.prospects;
