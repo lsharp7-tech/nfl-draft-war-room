@@ -515,10 +515,18 @@
         placeholder="sk-ant-...">
       <div style="font-size:11px;color:var(--muted);margin-bottom:18px;">Get your key at console.anthropic.com → API Keys</div>
 
+      <div style="border-top:1px solid var(--border);padding-top:16px;">
+        <div class="ai-label">GitHub Token <span style="font-size:10px;color:var(--muted);font-weight:400;">(for Share Board)</span></div>
+        <input id="github-token-input" type="password"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;margin-bottom:6px;"
+          placeholder="ghp_...">
+        <div style="font-size:11px;color:var(--muted);">github.com → Settings → Developer settings → Personal access tokens (classic) → <strong>gist</strong> scope only</div>
+      </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="clearApiKey()">Clear Key</button>
-      <button class="btn btn-gold" onclick="saveAllKeys()">Save Key</button>
+      <button class="btn btn-outline" onclick="clearApiKey()">Clear Anthropic</button>
+      <button class="btn btn-outline" onclick="clearGithubToken()">Clear GitHub</button>
+      <button class="btn btn-gold" onclick="saveAllKeys()">Save Keys</button>
     </div>
   </div>
 </div>
@@ -2016,18 +2024,22 @@ function confirmImport() {
 
 // ── API KEY ──────────────────────────────────────────────────────────
 function getApiKey() { return localStorage.getItem('anthropic_key') || ''; }
+function getGithubToken() { return localStorage.getItem('github_token') || ''; }
 
 function openKeyModal() {
   document.getElementById('api-key-input').value = getApiKey();
+  document.getElementById('github-token-input').value = getGithubToken();
   document.getElementById('key-modal').style.display = 'flex';
 }
 function closeKeyModal() { document.getElementById('key-modal').style.display = 'none'; }
 
 function saveAllKeys() {
   const ak = document.getElementById('api-key-input').value.trim();
+  const gh = document.getElementById('github-token-input').value.trim();
   if (ak) { localStorage.setItem('anthropic_key', ak); document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
+  if (gh) localStorage.setItem('github_token', gh);
   closeKeyModal();
-  showToast('✓ Key saved');
+  showToast('✓ Keys saved');
 }
 function saveApiKey() { saveAllKeys(); } // legacy alias
 function clearApiKey() {
@@ -2036,6 +2048,11 @@ function clearApiKey() {
   document.getElementById('key-btn').style.borderColor = '';
   document.getElementById('key-btn').style.color = '';
   showToast('Anthropic key cleared');
+}
+function clearGithubToken() {
+  localStorage.removeItem('github_token');
+  document.getElementById('github-token-input').value = '';
+  showToast('GitHub token cleared');
 }
 
 // ── SHARE BOARD ───────────────────────────────────────────────────────
@@ -2047,7 +2064,14 @@ function closeShareModal() { document.getElementById('share-modal').style.displa
 
 async function shareBoard() {
   openShareModal();
-  document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Creating shareable link…</div>`;
+  const token = getGithubToken();
+  if (!token) {
+    openKeyModal();
+    showToast('Add your GitHub token first to share your board');
+    return;
+  }
+  openShareModal();
+  document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Uploading ${PROSPECTS.length} prospects…</div>`;
   try {
     const FIELDS = ['id','name','pos','school','height','weight','forty','arm','bench','vertical','broad','shuttle','cone','grade','myRank','espn','pff','pfsn','cbs','ras','notes'];
     const payload = {
@@ -2056,29 +2080,27 @@ async function shareBoard() {
       p: PROSPECTS.map(p => FIELDS.map(f => p[f] ?? null)),
       t: TIERS
     };
-    const resp = await fetch('https://jsonblob.com/api/jsonBlob', {
+    const content = JSON.stringify(payload);
+    const resp = await fetch('https://api.github.com/gists', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(payload)
+      headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: `NFL Draft War Room — ${PROSPECTS.length} prospects`, public: true, files: { 'board.json': { content } } })
     });
-    if (!resp.ok) throw new Error(`Storage error ${resp.status}`);
-    // jsonblob returns the blob URL in the Location header
-    const location_header = resp.headers.get('Location') || '';
-    const blobId = location_header.split('/').pop();
-    if (!blobId) throw new Error('No blob ID returned');
-    const url = `${location.origin}${location.pathname}?board=${blobId}`;
+    if (!resp.ok) { const e = await resp.json(); throw new Error(e.message || resp.status); }
+    const gist = await resp.json();
+    const url = `${location.origin}${location.pathname}?board=${gist.id}`;
     document.getElementById('share-modal-body').innerHTML = `
       <div style="padding:20px;">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your full board (read-only). Works in Gmail, text, anywhere:</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your board (read-only) — no account needed:</div>
         <div style="display:flex;gap:8px;margin-bottom:10px;">
           <input id="share-url-out" readonly value="${url}"
             style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;">
           <button class="btn btn-gold" onclick="copyShareUrl()">Copy</button>
         </div>
-        <div style="font-size:11px;color:var(--muted);">${PROSPECTS.length} prospects included · No account required</div>
+        <div style="font-size:11px;color:var(--muted);">✓ ${PROSPECTS.length} prospects saved</div>
       </div>`;
   } catch(e) {
-    document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">Failed to create link: ${e.message}</div>`;
+    document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">Failed: ${e.message}<br><br><span style="color:var(--muted);font-size:11px;">Make sure your GitHub token has the <strong>gist</strong> scope.</span></div>`;
   }
 }
 
@@ -4658,9 +4680,11 @@ function importAllData() {
   const boardId = new URLSearchParams(location.search).get('board');
   if (boardId) {
     try {
-      const resp = await fetch(`https://jsonblob.com/api/jsonBlob/${encodeURIComponent(boardId)}`, { headers: { 'Accept': 'application/json' } });
+      const resp = await fetch(`https://api.github.com/gists/${encodeURIComponent(boardId)}`, { headers: { 'Accept': 'application/vnd.github+json' } });
       if (!resp.ok) throw new Error(`Board not found (${resp.status})`);
-      const raw = await resp.json();
+      const gist = await resp.json();
+      const raw = JSON.parse(gist.files?.['board.json']?.content || 'null');
+      if (!raw) throw new Error('Empty board data');
       let prospects, tiers;
       if (raw.f && raw.p) {
         const fields = raw.f;
