@@ -348,6 +348,7 @@
         <hr>
         <button onclick="deduplicateProspects()">🧹 Deduplicate</button>
         <button onclick="resetRankings()">↺ Reset Order</button>
+        <button onclick="autoFillMissingData()">🤖 Auto-Fill Missing Data</button>
         <hr>
         <button onclick="shareBoard()">🔗 Share Board</button>
       </div>
@@ -1082,6 +1083,83 @@ function onDragEnd(e) {
   e.currentTarget.classList.remove('dragging');
   document.querySelectorAll('.prospect-row').forEach(r => r.classList.remove('drag-over'));
   dragSrcIdx = null;
+}
+
+async function autoFillMissingData() {
+  const apiKey = getApiKey();
+  if (!apiKey) { openKeyModal(); showToast('Add your Anthropic API key first'); return; }
+
+  const missing = PROSPECTS.filter(p =>
+    !p.height || p.height === '—' ||
+    !p.weight || p.weight === 0 ||
+    !p.school || p.school === '—'
+  );
+  if (!missing.length) { showToast('✓ No missing data found'); return; }
+
+  const batchCount = Math.ceil(missing.length / 25);
+  if (!confirm(`Auto-fill missing height, weight, and school for ${missing.length} prospects? This will make ${batchCount} API call${batchCount > 1 ? 's' : ''}.`)) return;
+
+  let filled = 0;
+  showToast(`Auto-filling ${missing.length} prospects…`);
+
+  for (let i = 0; i < missing.length; i += 25) {
+    const batch = missing.slice(i, i + 25);
+    const list = batch.map(p => {
+      const needs = [];
+      if (!p.height || p.height === '—') needs.push('height');
+      if (!p.weight || p.weight === 0) needs.push('weight');
+      if (!p.school || p.school === '—') needs.push('school');
+      return { id: p.id, name: p.name, pos: p.pos, needs };
+    });
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2048,
+          messages: [{ role: 'user', content: `You are an NFL draft database. Fill in missing measurables for these prospects. Return ONLY a valid JSON array, no explanation.
+
+For each prospect fill the fields listed in their "needs" array:
+- height: format "feet-inches" e.g. "6-3"
+- weight: number in lbs e.g. 245
+- school: college name e.g. "Alabama"
+
+If you don't know a value with confidence, use null.
+
+${JSON.stringify(list)}
+
+Return: [{"id":1,"height":"6-3","weight":245,"school":"Alabama"},...]` }]
+        })
+      });
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const data = await res.json();
+      const text = data.content?.[0]?.text || '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('No JSON returned');
+      const results = JSON.parse(jsonMatch[0]);
+      for (const r of results) {
+        const p = PROSPECTS.find(x => x.id === r.id);
+        if (!p) continue;
+        if (r.height && (!p.height || p.height === '—')) { p.height = fixHeight(String(r.height)); filled++; }
+        if (r.weight && (!p.weight || p.weight === 0)) { p.weight = parseInt(r.weight) || 0; filled++; }
+        if (r.school && (!p.school || p.school === '—')) { p.school = r.school; filled++; }
+      }
+      if (i + 25 < missing.length) showToast(`Auto-filling… ${Math.min(i + 25, missing.length)}/${missing.length}`);
+    } catch(e) {
+      console.error('Auto-fill batch failed:', e);
+    }
+  }
+
+  saveProspects();
+  renderBoard();
+  showToast(`✓ Auto-fill done — ${filled} fields updated`);
 }
 
 function deduplicateProspects() {
