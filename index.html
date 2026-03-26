@@ -2045,7 +2045,9 @@ let _sharedProspects = null; // holds data for potential import
 function openShareModal() { document.getElementById('share-modal').style.display = 'flex'; }
 function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
 
-function shareBoard() {
+async function shareBoard() {
+  openShareModal();
+  document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Creating shareable link…</div>`;
   try {
     const FIELDS = ['id','name','pos','school','height','weight','forty','arm','bench','vertical','broad','shuttle','cone','grade','myRank','espn','pff','pfsn','cbs','ras','notes'];
     const payload = {
@@ -2054,13 +2056,14 @@ function shareBoard() {
       p: PROSPECTS.map(p => FIELDS.map(f => p[f] ?? null)),
       t: TIERS
     };
-    const json = JSON.stringify(payload);
-    const bytes = new TextEncoder().encode(json);
-    let binary = '';
-    bytes.forEach(b => binary += String.fromCharCode(b));
-    const encoded = btoa(binary);
-    const url = `${location.origin}${location.pathname}#board=${encoded}`;
-    openShareModal();
+    const resp = await fetch('/api/board-save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+    const { id } = await resp.json();
+    const url = `${location.origin}${location.pathname}?board=${id}`;
     document.getElementById('share-modal-body').innerHTML = `
       <div style="padding:20px;">
         <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your full board (read-only). Works in Gmail, text, anywhere:</div>
@@ -2072,8 +2075,7 @@ function shareBoard() {
         <div style="font-size:11px;color:var(--muted);">${PROSPECTS.length} prospects included · No account required</div>
       </div>`;
   } catch(e) {
-    openShareModal();
-    document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">Failed to generate link: ${e.message}</div>`;
+    document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">Failed to create link: ${e.message}<br><br><span style="color:var(--muted);font-size:11px;">Make sure you're using the deployed Netlify app, not a local file.</span></div>`;
   }
 }
 
@@ -4650,14 +4652,12 @@ function importAllData() {
 
 // ── INIT ─────────────────────────────────────────────────────────────
 (async () => {
-  const hashBoard = location.hash.startsWith('#board=') ? location.hash.slice(7) : null;
-  if (hashBoard) {
+  const boardId = new URLSearchParams(location.search).get('board');
+  if (boardId) {
     try {
-      const binary = atob(hashBoard);
-      const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-      const json = new TextDecoder().decode(bytes);
-      const raw = JSON.parse(json);
-      // Support both compact {v,f,p,t} format and legacy full-object format
+      const resp = await fetch(`/api/board-load?id=${encodeURIComponent(boardId)}`);
+      if (!resp.ok) throw new Error(`Board not found (${resp.status})`);
+      const raw = await resp.json();
       let prospects, tiers;
       if (raw.f && raw.p) {
         const fields = raw.f;
