@@ -978,6 +978,16 @@ function renderBoard() {
 
   const list = document.getElementById('prospect-list');
   list.innerHTML = '';
+  // Render top-of-board tier if present
+  const topTier = TIERS.find(t => t.afterId === '__top__');
+  if (topTier) {
+    const tierEl = document.createElement('div');
+    tierEl.className = 'tier-header';
+    tierEl.innerHTML = `<span class="tier-label">${topTier.name}</span>
+      <button class="tier-action-btn" onclick="renameTier('__top__')" title="Rename">✎</button>
+      <button class="tier-action-btn" onclick="deleteTier('__top__')" title="Delete">✕</button>`;
+    list.appendChild(tierEl);
+  }
   let prevProspect = null;
   filtered.forEach(p => {
     const origIdx = PROSPECTS.indexOf(p);
@@ -3957,10 +3967,10 @@ function autoTier() {
     breakPoints.push({ idx: bestIdx, name: anchor.name });
   }
 
-  TIERS = breakPoints.map(bp => ({
-    name: bp.name,
-    afterId: PROSPECTS[bp.idx - 1].id,
-  }));
+  TIERS = [
+    { name: 'Blue Chippers', afterId: '__top__' },
+    ...breakPoints.map(bp => ({ name: bp.name, afterId: PROSPECTS[bp.idx - 1].id })),
+  ];
 
   saveTiers();
   showTierZones = false;
