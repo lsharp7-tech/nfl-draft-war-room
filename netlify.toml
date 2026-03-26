@@ -5,3 +5,13 @@
   from = "/api/claude"
   to = "/.netlify/functions/claude"
   status = 200
+
+[[redirects]]
+  from = "/api/board-save"
+  to = "/.netlify/functions/board-save"
+  status = 200
+
+[[redirects]]
+  from = "/api/board-load"
+  to = "/.netlify/functions/board-load"
+  status = 200
