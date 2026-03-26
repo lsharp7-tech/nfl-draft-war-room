@@ -883,6 +883,8 @@ let TIERS = []; // [{name, afterId}] — tier header shown after prospect with t
 let showTierZones = false;
 
 // ── HELPERS ──────────────────────────────────────────────────────────
+function lerp(a, b, t) { return a + (b - a) * Math.min(1, Math.max(0, t)); }
+
 function heightToInches(h) {
   if (!h || h === '—') return 0;
   const m = h.match(/^(\d+)-(\d+)$/);
@@ -910,23 +912,36 @@ function fixHeight(h) {
 
 function computeGrade(p) {
   const expertRanks = [p.espn, p.pff, p.pfsn, p.cbs].filter(r => r > 0 && r < 999);
-  // Use live board position, not static myRank field
   const liveRank = PROSPECTS.indexOf(p) + 1;
   const myRankVal = liveRank > 0 ? liveRank : (p.myRank && p.myRank > 0 ? p.myRank : null);
+  const manualGrade = (p.grade > 0 && p.grade <= 100) ? p.grade : null;
 
-  if (expertRanks.length === 0 && !myRankVal) return p.grade || 60;
+  if (expertRanks.length === 0 && !myRankVal) return manualGrade || 60;
 
   const expertAvg = expertRanks.length > 0
     ? expertRanks.reduce((a, b) => a + b, 0) / expertRanks.length
     : myRankVal;
 
   // 70% expert consensus, 30% user's board rank
-  const weightedRank = myRankVal
-    ? 0.7 * expertAvg + 0.3 * myRankVal
-    : expertAvg;
+  const weightedRank = myRankVal ? 0.7 * expertAvg + 0.3 * myRankVal : expertAvg;
 
-  // Smooth linear grade: ~99 at rank 1, ~62 at rank 100+
-  let grade = Math.round(Math.max(62, Math.min(99, 100 - weightedRank * 0.38)));
+  // Piecewise linear curve covering full draft range (rank 1 → 600+)
+  // Matches NFL tier structure: elite → R1 → Day 2 → Day 3 → R7 → UDFA
+  const r = weightedRank;
+  let rankGrade;
+  if      (r <= 5)   rankGrade = lerp(99, 95, (r - 1) / 4);
+  else if (r <= 32)  rankGrade = lerp(94, 85, (r - 5) / 27);
+  else if (r <= 100) rankGrade = lerp(84, 72, (r - 32) / 68);
+  else if (r <= 175) rankGrade = lerp(71, 63, (r - 100) / 75);
+  else if (r <= 259) rankGrade = lerp(62, 55, (r - 175) / 84);
+  else if (r <= 400) rankGrade = lerp(54, 47, (r - 259) / 141);
+  else               rankGrade = Math.max(40, lerp(46, 40, (r - 400) / 200));
+  rankGrade = Math.round(rankGrade);
+
+  // Blend manual grade as 3rd signal if available: 70% rank-derived, 30% manual
+  let grade = manualGrade
+    ? Math.round(0.7 * rankGrade + 0.3 * manualGrade)
+    : rankGrade;
 
   // RAS modifier (±3 pts max)
   const ras = p.ras || 0;
@@ -936,7 +951,7 @@ function computeGrade(p) {
   else if (ras > 0 && ras < 2) grade -= 2;
   else if (ras > 0 && ras < 4) grade -= 1;
 
-  return Math.max(60, Math.min(99, grade));
+  return Math.max(40, Math.min(99, grade));
 }
 
 function getGradeColor(g) {
@@ -3203,12 +3218,13 @@ function valueScore(pick) {
   return Math.round(raw * roundWeight(pick.round));
 }
 
-// Adjusted score adds a +5 needs bonus if the pick fills a team need
+// Adjusted score adds a needs bonus scaled by round weight (R1=+15, R2=+10, R3=+7.5, R4-7=+5)
 function adjustedScore(pick, needs) {
   const base = valueScore(pick);
   if (base === null) return null;
   const p = PROSPECTS.find(x => x.id === pick.playerId);
-  return base + (p && needs && needs.includes(p.pos) ? 5 : 0);
+  const needsBonus = (p && needs && needs.includes(p.pos)) ? 5 * roundWeight(pick.round) : 0;
+  return base + needsBonus;
 }
 
 // Thresholds account for round weighting (R1 picks worth 3x)
