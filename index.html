@@ -2839,6 +2839,42 @@ function mockSubmitOtis() {
 
 // ── REPORT CARD ──────────────────────────────────────────────────────
 
+// text = readable accent color on dark bg; bg = tint color for gradient
+const TEAM_COLORS = {
+  'Arizona Cardinals':     { text: '#97233F', bg: '#97233F' },
+  'Atlanta Falcons':       { text: '#A71930', bg: '#A71930' },
+  'Baltimore Ravens':      { text: '#9E7C0C', bg: '#241773' },
+  'Buffalo Bills':         { text: '#C60C30', bg: '#00338D' },
+  'Carolina Panthers':     { text: '#0085CA', bg: '#0085CA' },
+  'Chicago Bears':         { text: '#C83803', bg: '#0B162A' },
+  'Cincinnati Bengals':    { text: '#FB4F14', bg: '#FB4F14' },
+  'Cleveland Browns':      { text: '#FF3C00', bg: '#311D00' },
+  'Dallas Cowboys':        { text: '#B0B7BC', bg: '#003594' },
+  'Denver Broncos':        { text: '#FB4F14', bg: '#002244' },
+  'Detroit Lions':         { text: '#0076B6', bg: '#0076B6' },
+  'Green Bay Packers':     { text: '#FFB612', bg: '#203731' },
+  'Houston Texans':        { text: '#A71930', bg: '#03202F' },
+  'Indianapolis Colts':    { text: '#4B82D0', bg: '#002C5F' },
+  'Jacksonville Jaguars':  { text: '#D7A22A', bg: '#006778' },
+  'Kansas City Chiefs':    { text: '#E31837', bg: '#E31837' },
+  'Las Vegas Raiders':     { text: '#A5ACAF', bg: '#A5ACAF' },
+  'Los Angeles Chargers':  { text: '#FFC20E', bg: '#0080C6' },
+  'Los Angeles Rams':      { text: '#FFA300', bg: '#003594' },
+  'Miami Dolphins':        { text: '#008E97', bg: '#FC4C02' },
+  'Minnesota Vikings':     { text: '#FFC62F', bg: '#4F2683' },
+  'New England Patriots':  { text: '#C60C30', bg: '#002244' },
+  'New Orleans Saints':    { text: '#D3BC8D', bg: '#101820' },
+  'New York Giants':       { text: '#A71930', bg: '#0B2265' },
+  'New York Jets':         { text: '#12A067', bg: '#125740' },
+  'Philadelphia Eagles':   { text: '#A5ACAF', bg: '#004C54' },
+  'Pittsburgh Steelers':   { text: '#FFB612', bg: '#101820' },
+  'San Francisco 49ers':   { text: '#AA0000', bg: '#B3995D' },
+  'Seattle Seahawks':      { text: '#69BE28', bg: '#002244' },
+  'Tampa Bay Buccaneers':  { text: '#D50A0A', bg: '#D50A0A' },
+  'Tennessee Titans':      { text: '#4B92DB', bg: '#0C2340' },
+  'Washington Commanders': { text: '#FFB612', bg: '#5A1414' },
+};
+
 const TEAM_NAME_MAP = {
   'L.A. Rams':      'Los Angeles Rams',
   'L.A. Chargers':  'Los Angeles Chargers',
@@ -3827,9 +3863,10 @@ function renderLiveClock() {
   const teamKey = TEAM_NAME_MAP[teamRaw] || teamRaw;
   const needs = TEAM_NEEDS[teamKey] || [];
   const needsBadges = needs.map(pos => `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:1px 5px;">${pos}</span>`).join(' ');
-  el.innerHTML = `<div class="live-clock-card">
+  const tc = TEAM_COLORS[teamKey] || TEAM_COLORS[teamRaw] || { text: 'var(--gold2)', bg: '#1a1400' };
+  el.innerHTML = `<div class="live-clock-card" style="background:linear-gradient(135deg,${tc.bg}40 0%,#12151c 100%);border-left:3px solid ${tc.text};">
     <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;">On the Clock · Rd ${pick.round} · Pick #${pick.pick}</div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:var(--gold2);line-height:1.1;">${teamRaw}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:${tc.text};line-height:1.1;">${teamRaw}</div>
     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:3px;">${needsBadges || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
   </div>`;
 }
