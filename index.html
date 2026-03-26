@@ -2081,8 +2081,11 @@ async function shareBoard() {
     });
     if (!resp.ok) { const e = await resp.json(); throw new Error(e.message || resp.status); }
     const gist = await resp.json();
-    const user = gist.owner?.login || '';
-    const url = `${location.origin}${location.pathname}?board=${gist.id}&user=${user}`;
+    // Extract username from the raw_url GitHub returns (most reliable)
+    const rawUrl = gist.files?.['board.json']?.raw_url || '';
+    const userMatch = rawUrl.match(/gist\.githubusercontent\.com\/([^/]+)\//);
+    const user = userMatch?.[1] || gist.owner?.login || '';
+    const url = `${location.origin}${location.pathname}?board=${gist.id}${user ? '&user=' + user : ''}`;
     document.getElementById('share-modal-body').innerHTML = `
       <div style="padding:20px;">
         <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your full board (read-only):</div>
