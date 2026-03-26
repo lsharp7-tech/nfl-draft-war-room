@@ -101,7 +101,7 @@
   .search-bar:focus { outline: none; border-color: var(--gold); }
   .search-bar::placeholder { color: var(--muted); }
   .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; margin-bottom: 16px; }
-  .filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
   .filter-btn.active { background: var(--gold); color: #000; border-color: var(--gold); }
   .filter-btn:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
 
@@ -366,7 +366,7 @@
   <div class="board-panel panel" id="board-panel">
     <div class="board-header">
       <h2>Big Board Rankings</h2>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+      <div style="display:flex;gap:6px;align-items:center;">
         <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Sort:</span>
         <button class="filter-btn active" id="sort-my" onclick="sortBoard('my',this)">My Board</button>
         <button class="filter-btn" id="sort-grade" onclick="sortBoard('grade',this)">Grade</button>
