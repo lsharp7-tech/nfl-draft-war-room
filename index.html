@@ -2089,7 +2089,8 @@ function appendPasteData() {
 
 function confirmImport() {
   const isCombine = IMP.rankTarget === 'combine';
-  const incoming = rowsToProspects(IMP.rows, IMP.mapping, isCombine);
+  const skipPosFilter = isCombine || IMP.mapping.pos === undefined || IMP.mapping.pos < 0;
+  const incoming = rowsToProspects(IMP.rows, IMP.mapping, skipPosFilter);
 
   if (IMP.importMode === 'replace') {
     PROSPECTS.length = 0;
