@@ -3674,32 +3674,49 @@ function clearAllTiers() {
 
 function autoTier() {
   if (!confirm('This will replace any existing tiers with auto-detected ones. Continue?')) return;
+  const n = PROSPECTS.length;
+  if (n < 6) { showToast('Not enough prospects to tier'); return; }
 
-  // Default tier names by slot (first tier has no break — it's the top of the board)
-  const tierNames = ['Round 1', 'Early Day 2', 'Late Day 2', 'Day 3 Starters', 'Deep Sleepers'];
+  const grades = PROSPECTS.map(p => computeGrade(p));
 
-  // Compute grade for every prospect in current board order
-  const grades = PROSPECTS.map((p, i) => ({ i, g: computeGrade(p) }));
+  // Anchor break positions at NFL draft round boundaries.
+  // For each anchor, snap to the largest grade drop within ±10 spots.
+  const anchors = [32, 64, 100, 136, 176, 219, 259, 320];
+  const tierLabels = ['Round 2', 'Round 3', 'Round 4', 'Day 3', 'Round 6', 'Round 7', 'Priority UDFA', 'Deep Sleepers'];
+  const WINDOW = 10;
 
-  // Find the 4 biggest grade drops between consecutive players
-  const drops = [];
-  for (let i = 1; i < grades.length; i++) {
-    drops.push({ startIdx: i, drop: grades[i - 1].g - grades[i].g });
+  const breakPoints = [];
+  for (let a = 0; a < anchors.length; a++) {
+    const center = anchors[a];
+    if (center >= n - 3) break; // beyond board length
+
+    const lo = Math.max(1, center - WINDOW);
+    const hi = Math.min(n - 2, center + WINDOW);
+
+    // Find the largest grade drop in this window
+    let bestDrop = -Infinity, bestIdx = center;
+    for (let j = lo; j <= hi; j++) {
+      const drop = grades[j - 1] - grades[j];
+      if (drop > bestDrop) { bestDrop = drop; bestIdx = j; }
+    }
+
+    // Don't add if too close to previous break (min 5 apart)
+    if (!breakPoints.length || bestIdx - breakPoints[breakPoints.length - 1] >= 5) {
+      breakPoints.push({ idx: bestIdx, name: tierLabels[a] });
+    }
   }
-  drops.sort((a, b) => b.drop - a.drop);
-  const breakPoints = drops.slice(0, 4).map(d => d.startIdx).sort((a, b) => a - b);
 
-  // afterId = ID of the last prospect before the break (startIdx - 1)
-  TIERS = breakPoints.map((startIdx, slot) => ({
-    name: tierNames[slot + 1] || `Tier ${slot + 2}`,
-    afterId: PROSPECTS[startIdx - 1].id,
+  TIERS = breakPoints.map(bp => ({
+    name: bp.name,
+    afterId: PROSPECTS[bp.idx - 1].id,
   }));
+
   saveTiers();
   showTierZones = false;
   const btn = document.getElementById('tiers-toggle-btn');
   if (btn) btn.classList.remove('active');
   renderBoard();
-  showToast(`Auto-tiered into ${TIERS.length + 1} tiers based on grade drop-offs`);
+  showToast(`Auto-tiered into ${TIERS.length + 1} tiers`);
 }
 
 // ── COMBINE FILTERS ────────────────────────────────────────────────────
