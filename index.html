@@ -52,7 +52,7 @@
   /* HEADER DROPDOWN */
   .header-dropdown { position:relative; display:flex; align-items:center; }
   .header-dropdown .dropdown-menu { display:none; position:absolute; top:calc(100% + 6px); right:0; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:4px; min-width:190px; z-index:200; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
-  .header-dropdown:hover .dropdown-menu { display:block; }
+  .header-dropdown .dropdown-menu.open { display:block; }
   .dropdown-menu button { display:block; width:100%; padding:8px 12px; background:none; border:none; color:var(--text); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500; cursor:pointer; text-align:left; border-radius:4px; white-space:nowrap; }
   .dropdown-menu button:hover { background:var(--surface); color:var(--gold); }
   .dropdown-menu hr { border:none; border-top:1px solid var(--border); margin:4px 0; }
@@ -337,8 +337,8 @@
     <span id="prospect-count" style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
     <button class="btn btn-outline" id="lock-board-btn" onclick="toggleBoardLock()">🔒 Lock Board</button>
     <button class="btn btn-outline" onclick="openAddProspectModal()">➕ Add Prospect</button>
-    <div class="header-dropdown">
-      <button class="btn btn-outline">📁 Data ▾</button>
+    <div class="header-dropdown" id="data-dropdown">
+      <button class="btn btn-outline" onclick="toggleDataDropdown(event)">📁 Data ▾</button>
       <div class="dropdown-menu">
         <button onclick="openImportModal()">⬆ Import Players</button>
         <button onclick="exportCSV()">⬇ Export CSV</button>
@@ -1593,6 +1593,16 @@ function openAITab() {
   if (!selectedId) { showToast('Select a prospect first'); return; }
   switchDetailTab('ai');
 }
+
+function toggleDataDropdown(e) {
+  e.stopPropagation();
+  const menu = document.querySelector('#data-dropdown .dropdown-menu');
+  menu.classList.toggle('open');
+}
+document.addEventListener('click', () => {
+  const menu = document.querySelector('#data-dropdown .dropdown-menu');
+  if (menu) menu.classList.remove('open');
+});
 
 function showToast(msg) {
   const t = document.getElementById('toast');
