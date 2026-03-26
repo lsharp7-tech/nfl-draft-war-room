@@ -58,10 +58,10 @@
   .dropdown-menu hr { border:none; border-top:1px solid var(--border); margin:4px 0; }
 
   /* TOOLTIP */
-  .info-tip { position:relative; display:inline-flex; align-items:center; }
-  .info-tip-icon { width:14px; height:14px; border-radius:50%; background:var(--border); color:var(--muted); font-size:9px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; cursor:default; margin-left:4px; flex-shrink:0; }
-  .info-tip-icon:hover { background:var(--gold); color:#000; }
-  .info-tip-box { display:none; position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-width:220px; z-index:300; box-shadow:0 8px 24px rgba(0,0,0,0.5); pointer-events:none; }
+  .info-tip { position:fixed; bottom:24px; right:24px; z-index:400; }
+  .info-tip-icon { width:36px; height:36px; border-radius:50%; background:var(--gold); color:#000; font-size:16px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; cursor:default; box-shadow:0 4px 16px rgba(0,0,0,0.5); }
+  .info-tip-icon:hover { background:var(--accent); color:#fff; }
+  .info-tip-box { display:none; position:absolute; bottom:calc(100% + 10px); right:0; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; min-width:200px; z-index:300; box-shadow:0 8px 24px rgba(0,0,0,0.5); pointer-events:none; }
   .info-tip:hover .info-tip-box { display:block; }
   .info-tip-box div { font-size:11px; color:var(--muted); line-height:1.8; white-space:nowrap; }
   .info-tip-box strong { color:var(--text); font-size:11px; display:block; margin-bottom:4px; letter-spacing:0.5px; }
@@ -389,19 +389,6 @@
         <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Sort:</span>
         <button class="filter-btn active" id="sort-my" onclick="sortBoard('my',this)">My Board</button>
         <button class="filter-btn" id="sort-grade" onclick="sortBoard('grade',this)">Grade</button>
-        <span class="info-tip">
-          <span class="info-tip-icon">?</span>
-          <div class="info-tip-box">
-            <strong>Overall Grade Scale</strong>
-            <div>95–99 &nbsp;· Ranks 1–5 &nbsp;&nbsp;&nbsp;&nbsp;Elite / Generational</div>
-            <div>85–94 &nbsp;· Ranks 6–32 &nbsp;&nbsp;&nbsp;Round 1</div>
-            <div>72–84 &nbsp;· Ranks 33–100 &nbsp;Day 2</div>
-            <div>63–71 &nbsp;· Ranks 101–175 Day 3</div>
-            <div>55–62 &nbsp;· Ranks 176–259 Round 6 / 7</div>
-            <div>47–54 &nbsp;· Ranks 260–400 Priority UDFA</div>
-            <div>40–46 &nbsp;· Ranks 400+ &nbsp;&nbsp;&nbsp;Deep Sleeper</div>
-          </div>
-        </span>
         <button class="filter-btn" id="sort-espn" onclick="sortBoard('espn',this)">B/R</button>
         <button class="filter-btn" id="sort-pff" onclick="sortBoard('pff',this)">PFF</button>
         <button class="filter-btn" id="sort-pfsn" onclick="sortBoard('pfsn',this)">PFSN</button>
@@ -4928,5 +4915,19 @@ function importAllData() {
   if (getApiKey()) { document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
 })();
 </script>
+
+<span class="info-tip">
+  <span class="info-tip-icon">?</span>
+  <div class="info-tip-box">
+    <strong>Overall Grade Scale</strong>
+    <div>95–99 &nbsp;· Elite / Generational</div>
+    <div>85–94 &nbsp;· Round 1</div>
+    <div>72–84 &nbsp;· Day 2</div>
+    <div>63–71 &nbsp;· Day 3</div>
+    <div>55–62 &nbsp;· Round 6 / 7</div>
+    <div>47–54 &nbsp;· Priority UDFA</div>
+    <div>40–46 &nbsp;· Deep Sleeper</div>
+  </div>
+</span>
 </body>
 </html>
