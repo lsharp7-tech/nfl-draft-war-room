@@ -49,6 +49,14 @@
   .live-panel-tab { flex:1; padding:10px; text-align:center; font-size:11px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; text-transform:uppercase; letter-spacing:0.5px; }
   .live-panel-tab.active { color:var(--gold2); border-bottom-color:var(--gold2); }
 
+  /* HEADER DROPDOWN */
+  .header-dropdown { position:relative; }
+  .header-dropdown .dropdown-menu { display:none; position:absolute; top:calc(100% + 6px); right:0; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:4px; min-width:190px; z-index:200; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+  .header-dropdown:hover .dropdown-menu { display:block; }
+  .dropdown-menu button { display:block; width:100%; padding:8px 12px; background:none; border:none; color:var(--text); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500; cursor:pointer; text-align:left; border-radius:4px; white-space:nowrap; }
+  .dropdown-menu button:hover { background:var(--surface); color:var(--gold); }
+  .dropdown-menu hr { border:none; border-top:1px solid var(--border); margin:4px 0; }
+
   /* HEADER */
   header {
     background: linear-gradient(135deg, #0f1218 0%, #1a1020 100%);
@@ -329,13 +337,20 @@
     <span id="prospect-count" style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
     <button class="btn btn-outline" id="lock-board-btn" onclick="toggleBoardLock()">🔒 Lock Board</button>
     <button class="btn btn-outline" onclick="openAddProspectModal()">➕ Add Prospect</button>
-    <button class="btn btn-outline" onclick="openImportModal()">⬆ Import Players</button>
-    <button class="btn btn-outline" onclick="exportCSV()">⬇ Export CSV</button>
-    <button class="btn btn-outline" onclick="exportAllData()" title="Back up all data to a JSON file">💾 Backup</button>
-    <button class="btn btn-outline" onclick="importAllData()" title="Restore from a backup JSON file">📂 Restore</button>
+    <div class="header-dropdown">
+      <button class="btn btn-outline">📁 Data ▾</button>
+      <div class="dropdown-menu">
+        <button onclick="openImportModal()">⬆ Import Players</button>
+        <button onclick="exportCSV()">⬇ Export CSV</button>
+        <hr>
+        <button onclick="exportAllData()">💾 Backup All Data</button>
+        <button onclick="importAllData()">📂 Restore Backup</button>
+        <hr>
+        <button onclick="deduplicateProspects()">🧹 Deduplicate</button>
+        <button onclick="resetRankings()">↺ Reset Order</button>
+      </div>
+    </div>
     <button class="btn btn-outline" onclick="openKeyModal()" id="key-btn">🔑 API Key</button>
-    <button class="btn btn-outline" onclick="deduplicateProspects()">🧹 Dedupe</button>
-    <button class="btn btn-outline" onclick="resetRankings()">Reset Order</button>
     <button class="btn btn-gold" onclick="openAITab()">🐶 Ask Otis</button>
   </div>
 </header>
