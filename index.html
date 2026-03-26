@@ -2131,10 +2131,21 @@ function confirmImport() {
     showToast(`✓ ${IMP.rankTarget.toUpperCase()}: updated ${updated}, added ${added} · ${PROSPECTS.length} total`);
 
   } else {
-    const existing = new Set(PROSPECTS.map(p=>p.name.toLowerCase()));
-    const toAdd = incoming.filter(p=>!existing.has(p.name.toLowerCase()));
+    const existingMap = new Map(PROSPECTS.map(p => [p.name.toLowerCase(), p]));
+    const toAdd = [];
+    let updated = 0;
+    incoming.forEach(p => {
+      const match = existingMap.get(p.name.toLowerCase());
+      if (match) {
+        if (p.school && p.school !== '—' && (!match.school || match.school === '—')) { match.school = p.school; updated++; }
+        if (p.height && p.height !== '—' && (!match.height || match.height === '—')) { match.height = fixHeight(p.height); updated++; }
+        if (p.weight > 0 && (!match.weight || match.weight === 0)) { match.weight = p.weight; updated++; }
+      } else {
+        toAdd.push(p);
+      }
+    });
     PROSPECTS.push(...toAdd);
-    showToast(`✓ Added ${toAdd.length} prospects · ${PROSPECTS.length} total`);
+    showToast(`✓ Added ${toAdd.length} prospects · updated ${updated} blank fields · ${PROSPECTS.length} total`);
   }
 
   saveProspects();
