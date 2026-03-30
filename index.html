@@ -330,6 +330,24 @@
   .combine-row { padding:8px 16px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
   .combine-input { background:var(--surface2); border:1px solid var(--border); border-radius:5px; padding:4px 7px; color:var(--text); font-size:11px; font-family:'DM Mono',monospace; width:58px; }
   .combine-label { font-size:11px; color:var(--muted); white-space:nowrap; }
+
+  /* CONSENSUS CHIP */
+  .chip-con { background: #2d1a4a; color: #c084fc; border: 1px solid #6b21a8; }
+
+  /* DRAFT CLOCK */
+  .draft-clock-display { font-family:'DM Mono',monospace; font-size:36px; font-weight:700; letter-spacing:4px; text-align:center; padding:8px 0; }
+  .draft-clock-display.clock-warning { color: var(--gold); }
+  .draft-clock-display.clock-urgent  { color: var(--red); animation: pulse-red 1s ease-in-out infinite; }
+  @keyframes pulse-red { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+  .clock-btn { padding:5px 12px; border-radius:5px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; }
+  .clock-btn:hover { border-color:var(--gold); color:var(--gold); }
+  .clock-btn.clock-running { border-color:var(--green); color:var(--green); }
+
+  /* SCARCITY BAR */
+  .scarcity-bar { display:flex; flex-wrap:wrap; gap:4px; padding:8px 14px; border-bottom:1px solid var(--border); background:var(--bg); }
+  .scarcity-pill { display:flex; align-items:center; gap:3px; padding:2px 6px; border-radius:4px; border:1px solid var(--border); font-size:10px; font-weight:700; cursor:default; }
+  .scarcity-pill.scarce { border-color:var(--red); color:var(--red); }
+  .scarcity-pill.plentiful { color:var(--muted); }
 </style>
 </head>
 <body>
@@ -360,6 +378,7 @@
         <button onclick="autoFillMissingData()">🤖 Auto-Fill Missing Data</button>
         <hr>
         <button onclick="shareBoard()">🔗 Share Board</button>
+        <button onclick="printBoard()">🖨 Print Board</button>
       </div>
     </div>
     <button class="btn btn-outline" onclick="openKeyModal()" id="key-btn">🔑 API Key</button>
@@ -394,6 +413,7 @@
         <button class="filter-btn" id="sort-pfsn" onclick="sortBoard('pfsn',this)">PFSN</button>
         <button class="filter-btn" id="sort-cbs" onclick="sortBoard('cbs',this)">CBS</button>
         <button class="filter-btn" id="sort-ras" onclick="sortBoard('ras',this)">RAS</button>
+        <button class="filter-btn" id="sort-con" onclick="sortBoard('consensus',this)">CON</button>
       </div>
     </div>
     <div id="board-lock-banner" style="display:none;">🔒 Board is locked — rankings are preserved for draft night.</div>
@@ -502,6 +522,8 @@
       <button class="btn btn-outline" style="font-size:12px;" onclick="openLoadDraftModal()">📂 Load</button>
       <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
       <button class="btn btn-outline" onclick="exportMockDraft()">⬇ Export Draft</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openReachesModal()">🎯 Reaches & Steals</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openTradeLogModal()">📋 Trade Log</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
     </div>
   </div>
@@ -730,6 +752,10 @@
           <input id="ap-cbs" type="number" placeholder="999 = unranked" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
         </div>
         <div style="grid-column:1/-1;">
+          <div class="ai-label">College Stats <span style="font-size:10px;color:var(--muted);font-weight:400;">(e.g. "94 rec · 1,174 yds · 11 TD" or "14.5 sacks · 22 TFLs")</span></div>
+          <input id="ap-stats" type="text" placeholder="Last season stats..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Mono',monospace;">
+        </div>
+        <div style="grid-column:1/-1;">
           <div class="ai-label">Scouting Notes</div>
           <textarea id="ap-notes" rows="3" placeholder="Brief scouting summary..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;resize:vertical;"></textarea>
         </div>
@@ -894,6 +920,11 @@ let showTierZones = false;
 // ── HELPERS ──────────────────────────────────────────────────────────
 function lerp(a, b, t) { return a + (b - a) * Math.min(1, Math.max(0, t)); }
 
+function consensusRank(p) {
+  const ranks = [p.espn, p.pff, p.pfsn, p.cbs].filter(r => r > 0 && r < 999);
+  return ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : 9999;
+}
+
 function heightToInches(h) {
   if (!h || h === '—') return 0;
   const m = h.match(/^(\d+)-(\d+)$/);
@@ -1036,11 +1067,10 @@ function renderBoard() {
     row.dataset.id = p.id;
     row.dataset.origIdx = origIdx;
 
-    const avgRank = Math.round((p.espn + p.pff + p.pfsn + p.cbs) / 4);
-    const diff = avgRank - displayRank;
-    const diffStr = diff > 0 ? `<span style="color:var(--green);font-size:10px;">▲${diff}</span>` :
-                    diff < 0 ? `<span style="color:var(--red);font-size:10px;">▼${Math.abs(diff)}</span>` :
-                    `<span style="color:var(--muted);font-size:10px;">—</span>`;
+    const conRank = consensusRank(p);
+    const conDisplay = conRank < 9999 ? Math.round(conRank) : null;
+    const diff = conDisplay ? conDisplay - displayRank : 0;
+    const diffStr = conDisplay && diff !== 0 ? (diff > 0 ? `<span style="color:var(--green);font-size:10px;">▲${diff}</span>` : `<span style="color:var(--red);font-size:10px;">▼${Math.abs(diff)}</span>`) : '';
 
     row.innerHTML = `
       <span class="drag-handle">⠿</span>
@@ -1059,6 +1089,7 @@ function renderBoard() {
           <span class="chip chip-pfsn">PFSN ${p.pfsn > 0 && p.pfsn < 999 ? p.pfsn : '—'}</span>
           <span class="chip chip-cbs">CBS ${p.cbs > 0 && p.cbs < 999 ? p.cbs : '—'}</span>
         </div>
+        ${conDisplay ? `<div class="ranking-chips"><span class="chip chip-con" title="Consensus avg rank">CON ${conDisplay}</span></div>` : ''}
       </div>
       <div style="text-align:right;">
         <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:${getGradeColor(computeGrade(p))}">${computeGrade(p)}</div>
@@ -1244,6 +1275,8 @@ function sortBoard(type, btn) {
     PROSPECTS.sort((a, b) => computeGrade(b) - computeGrade(a));
   } else if (type === 'ras') {
     PROSPECTS.sort((a, b) => (b.ras || 0) - (a.ras || 0));
+  } else if (type === 'consensus') {
+    PROSPECTS.sort((a, b) => consensusRank(a) - consensusRank(b));
   } else {
     PROSPECTS.sort((a, b) => (a[type] || 999) - (b[type] || 999));
   }
@@ -1330,10 +1363,16 @@ function renderProspectProfile(p) {
     <div style="font-size:13px;color:var(--muted);line-height:1.65;background:var(--bg);border-radius:8px;padding:12px;border:1px solid var(--border);margin-bottom:16px;">${p.notes}</div>
     ` : ''}
 
-    <div style="display:flex;gap:8px;margin-top:4px;">
-      <button class="btn btn-outline" style="flex:1;" onclick="openEditModal(${selectedId})">✏️ Edit</button>
-      <button class="btn btn-red" style="flex:1;" onclick="deleteProspect(${selectedId})">🗑 Delete</button>
-      <button class="btn btn-gold" style="flex:2;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🐶 Ask Otis</button>
+    ${p.statsLine ? `
+    <div class="section-title">College Stats</div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-family:'DM Mono',monospace;font-size:13px;color:var(--text);letter-spacing:0.3px;">${p.statsLine}</div>
+    ` : ''}
+
+    <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
+      <button class="btn btn-outline" style="flex:1;min-width:70px;" onclick="openEditModal(${selectedId})">✏️ Edit</button>
+      <button class="btn btn-red" style="flex:1;min-width:70px;" onclick="deleteProspect(${selectedId})">🗑 Delete</button>
+      <button class="btn btn-outline" style="flex:1;min-width:80px;" onclick="generateFullReport(${selectedId})">📋 Full Report</button>
+      <button class="btn btn-gold" style="flex:2;min-width:100px;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🐶 Ask Otis</button>
     </div>
   `;
 }
@@ -1388,10 +1427,11 @@ async function askAI(question, prospectId) {
 Prospect: ${p.name} | Position: ${p.pos} | School: ${p.school}
 Measurables: ${p.height}, ${p.weight}lbs, ${p.forty}s 40
 Grade: ${p.grade}/100 | B/R: #${p.espn} | PFF: #${p.pff} | PFSN: #${p.pfsn} | CBS: #${p.cbs}
-My board rank: #${PROSPECTS.indexOf(p)+1}
+My board rank: #${PROSPECTS.indexOf(p)+1}${p.statsLine ? `\nCollege stats: ${p.statsLine}` : ''}
 Scouting notes: ${p.notes}` : '';
 
-  const systemPrompt = `You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements. Keep responses to 3-5 sentences unless more detail is needed.${prospectCtx ? '\n\nProspect Data:\n' + prospectCtx : ''}`;
+  const isRedFlags = /red flag|character|off.field|concern|risk|issue/i.test(question);
+  const systemPrompt = `You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements. Keep responses to 3-5 sentences unless more detail is needed. When it's relevant to the evaluation, don't shy away from mentioning a player's personality, leadership traits, locker room reputation, or off-field behavior — especially any known incidents, legal issues, or character concerns that scouts would flag.${isRedFlags ? ' For red flags questions, always address character and off-field factors if any exist — this is just as important as on-field concerns.' : ''}${prospectCtx ? '\n\nProspect Data:\n' + prospectCtx : ''}`;
 
   const hist = document.getElementById('ai-chat-history');
   if (hist) hist.innerHTML += `<div class="ai-history"><div class="ai-msg ai-msg-ai" style="color:var(--muted);font-style:italic;">Analyzing...</div></div>`;
@@ -1495,10 +1535,10 @@ function renderCompare() {
   const stats = [
     { label:'Grade',          keyA:computeGrade(a),    keyB:computeGrade(b),    numA:computeGrade(a),    numB:computeGrade(b),    higher:true  },
     { label:'My Board Rank',  keyA:'#'+(PROSPECTS.indexOf(a)+1), keyB:'#'+(PROSPECTS.indexOf(b)+1), numA:PROSPECTS.indexOf(a)+1, numB:PROSPECTS.indexOf(b)+1, higher:false },
-    { label:'B/R Rank',       keyA:'#'+a.espn,         keyB:'#'+b.espn,         numA:a.espn,             numB:b.espn,             higher:false },
-    { label:'PFF Rank',       keyA:'#'+a.pff,          keyB:'#'+b.pff,          numA:a.pff,              numB:b.pff,              higher:false },
-    { label:'PFSN Rank',      keyA:'#'+a.pfsn,         keyB:'#'+b.pfsn,         numA:a.pfsn,             numB:b.pfsn,             higher:false },
-    { label:'CBS Rank',       keyA:'#'+a.cbs,          keyB:'#'+b.cbs,          numA:a.cbs,              numB:b.cbs,              higher:false },
+    { label:'B/R Rank',       keyA:a.espn>0&&a.espn<999?'#'+a.espn:'—', keyB:b.espn>0&&b.espn<999?'#'+b.espn:'—', numA:a.espn||0, numB:b.espn||0, higher:false },
+    { label:'PFF Rank',       keyA:a.pff>0&&a.pff<999?'#'+a.pff:'—',   keyB:b.pff>0&&b.pff<999?'#'+b.pff:'—',   numA:a.pff||0,  numB:b.pff||0,  higher:false },
+    { label:'PFSN Rank',      keyA:a.pfsn>0&&a.pfsn<999?'#'+a.pfsn:'—',keyB:b.pfsn>0&&b.pfsn<999?'#'+b.pfsn:'—',numA:a.pfsn||0, numB:b.pfsn||0, higher:false },
+    { label:'CBS Rank',       keyA:a.cbs>0&&a.cbs<999?'#'+a.cbs:'—',   keyB:b.cbs>0&&b.cbs<999?'#'+b.cbs:'—',   numA:a.cbs||0,  numB:b.cbs||0,  higher:false },
     { label:'Height',         keyA:a.height!=='—'?a.height:'—',  keyB:b.height!=='—'?b.height:'—',  numA:heightToInches(a.height), numB:heightToInches(b.height), higher:true },
     { label:'Weight',         keyA:a.weight+' lbs',  keyB:b.weight+' lbs',  numA:a.weight,           numB:b.weight,           higher:true  },
     { label:'RAS Score',      keyA:a.ras>0?a.ras.toFixed(2):'—', keyB:b.ras>0?b.ras.toFixed(2):'—', numA:a.ras||0, numB:b.ras||0, higher:true },
@@ -1604,6 +1644,10 @@ function switchView(view, btn) {
     renderMockDraft();
   } else if (view === 'live') {
     document.getElementById('live-draft-view').style.display = 'block';
+    if (!draftClockTime) {
+      const curPick = liveMockPick(liveCurrentPick);
+      draftClockTime = draftClockSecsForRound(curPick?.round || 1);
+    }
     renderLiveDraft();
   } else {
     if (livePollingActive) stopLivePolling();
@@ -1890,6 +1934,11 @@ function openEditModal(id) {
     field('40-Yard Dash', 'forty', p.forty) +
     field('RAS Score', 'ras', p.ras || '') +
     `<div style="grid-column:1/-1;">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">College Stats</div>
+      <input data-key="statsLine" value="${p.statsLine || ''}" placeholder="e.g. 94 rec · 1,174 yds · 11 TD"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;">
+    </div>
+    <div style="grid-column:1/-1;">
       <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Scouting Notes</div>
       <textarea data-key="notes" rows="3" placeholder="Your scouting notes..."
         style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;">${p.notes || ''}</textarea>
@@ -1910,6 +1959,7 @@ function saveProspectEdit() {
     if (key === 'weight') p.weight = parseInt(val) || 0;
     else if (key === 'ras') p.ras = parseFloat(val) || 0;
     else if (key === 'notes') p.notes = val;
+    else if (key === 'statsLine') p.statsLine = val;
     else p[key] = val || '—';
   });
   saveProspects();
@@ -2238,7 +2288,6 @@ function openShareModal() { document.getElementById('share-modal').style.display
 function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
 
 async function shareBoard() {
-  openShareModal();
   const token = getGithubToken();
   if (!token) {
     openKeyModal();
@@ -2248,7 +2297,7 @@ async function shareBoard() {
   openShareModal();
   document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Uploading ${PROSPECTS.length} prospects…</div>`;
   try {
-    const FIELDS = ['id','name','pos','school','height','weight','forty','arm','bench','vertical','broad','shuttle','cone','grade','myRank','espn','pff','pfsn','cbs','ras','notes'];
+    const FIELDS = ['id','name','pos','school','height','weight','forty','arm','grade','myRank','espn','pff','pfsn','cbs','ras','notes'];
     const payload = {
       v: 1,
       f: FIELDS,
@@ -2692,6 +2741,17 @@ function renderMockPicks() {
   if (!panel) return;
   let html = '';
   let lastRound = 0;
+  // Build next-pick-for-team map: given current pick, how many picks away is each team's next turn?
+  const firstEmptyPick = MOCK_PICKS.find(p => !p.playerId)?.pick || null;
+  const nextPickMap = {};
+  if (firstEmptyPick) {
+    const remaining = MOCK_PICKS.filter(p => p.pick >= firstEmptyPick && !p.playerId);
+    remaining.forEach((pick, idx) => {
+      const owner = pickOwner(pick);
+      if (!(owner in nextPickMap)) nextPickMap[owner] = { pick: pick.pick, away: idx };
+    });
+  }
+
   MOCK_PICKS.forEach(pick => {
     if (pick.round !== lastRound) {
       html += `<div class="mock-round-header">Round ${pick.round}</div>`;
@@ -2704,12 +2764,19 @@ function renderMockPicks() {
     const originalOwner = pick.team.replace(/\s*\(via[^)]*\)/i, '').trim();
     const currentOwner = pickOwner(pick);
     const viaBadge = pick.owner ? `<span class="trade-via-badge">via ${originalOwner}</span>` : '';
+    // Next-pick countdown: show for filled rows how many picks until this team picks again
+    let nextBadge = '';
+    if (p && nextPickMap[currentOwner]) {
+      const away = nextPickMap[currentOwner].away;
+      const nextNum = nextPickMap[currentOwner].pick;
+      nextBadge = `<span style="font-size:9px;color:var(--muted);">next:#${nextNum} (${away === 0 ? 'on clock' : '+'+away})</span>`;
+    }
     html += `<div class="mock-pick-row ${isSelected ? 'selected' : ''} ${p ? 'filled' : ''} ${isMine ? 'my-pick' : ''}" onclick="selectMockPick(${pick.pick})">
       <span class="mock-pick-num">${pick.pick}</span>
       <div style="flex:1;min-width:0;">
         <div class="mock-team">${currentOwner}${myBadge}${viaBadge}</div>
         ${p
-          ? `<div class="mock-player-name">${p.name} <span class="mock-player-pos">${p.pos}</span></div>`
+          ? `<div class="mock-player-name">${p.name} <span class="mock-player-pos">${p.pos}</span></div>${nextBadge}`
           : `<div class="mock-empty">— No selection —</div>`}
       </div>
       ${p ? `<button class="mock-remove" onclick="event.stopPropagation();removeMockPick(${pick.pick})" title="Remove">✕</button>` : ''}
@@ -2801,6 +2868,22 @@ function renderMockBoard() {
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;" />
     </div>`;
 
+  // Positional scarcity bar
+  const draftedPos = {};
+  const totalPos = {};
+  PROSPECTS.forEach(p => { totalPos[p.pos] = (totalPos[p.pos] || 0) + 1; });
+  PROSPECTS.filter(p => draftedIds.has(p.id)).forEach(p => { draftedPos[p.pos] = (draftedPos[p.pos] || 0) + 1; });
+  const posOrder = ['QB','RB','WR','TE','OT','IOL','C','EDGE','DT','LB','CB','S'];
+  const scarcityBar = `<div class="scarcity-bar" title="Remaining prospects by position">${posOrder.map(pos => {
+    const total = totalPos[pos] || 0;
+    const drafted = draftedPos[pos] || 0;
+    const remaining = total - drafted;
+    if (!total) return '';
+    const pct = remaining / total;
+    const scarce = pct < 0.3;
+    return `<span class="scarcity-pill ${scarce ? 'scarce' : 'plentiful'}" title="${remaining} of ${total} ${pos} remaining"><span class="pos-badge pos-${pos}" style="font-size:9px;padding:1px 4px;">${pos}</span>${remaining}</span>`;
+  }).join('')}</div>`;
+
   // Player rows — drafted players hidden, click opens profile
   const searchLower = mockBoardSearch.toLowerCase();
   const rows = sortedMockProspects()
@@ -2825,7 +2908,7 @@ function renderMockBoard() {
       </div>`;
     }).join('');
 
-  panel.innerHTML = hint + needsCard + sortBar + filterBar + searchBar + rows;
+  panel.innerHTML = scarcityBar + hint + needsCard + sortBar + filterBar + searchBar + rows;
 }
 
 function selectMockPick(pickNum) {
@@ -3105,7 +3188,7 @@ async function mockAskOtis(question) {
       headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6', max_tokens: 600,
-        system: `You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements. Keep responses to 3-5 sentences unless more detail is needed.\n\nProspect Data:\n${ctx}`,
+        system: `You are an expert NFL draft analyst and scout. Provide concise, insightful, specific analysis. Be direct, use football terminology, give concrete assessments. Avoid generic statements. Keep responses to 3-5 sentences unless more detail is needed. When it's relevant to the evaluation, don't shy away from mentioning a player's personality, leadership traits, locker room reputation, or off-field behavior — especially any known incidents, legal issues, or character concerns that scouts would flag. For red flags questions, always address character and off-field factors if any exist.\n\nProspect Data:\n${ctx}`,
         messages: mockOtisHistory,
       }),
     });
@@ -3566,6 +3649,7 @@ function loadProspects() {
 }
 
 // ── TRADE SIMULATOR ───────────────────────────────────────────────────
+let TRADE_LOG = [];
 let tradeTeamA = null;
 let tradeTeamB = null;
 let tradePicksA = new Set();
@@ -3803,6 +3887,12 @@ function executeTrade() {
     const fp = FUTURE_PICKS.find(p => p.id === id);
     if (fp) fp.owner = tradeTeamA;
   });
+  TRADE_LOG.push({
+    teamA: tradeTeamA, teamB: tradeTeamB,
+    givesA: [...tradePicksA], givesB: [...tradePicksB],
+    futureA: [...tradeFuturePicksA], futureB: [...tradeFuturePicksB],
+    valA, valB, ts: Date.now(),
+  });
   saveMockDraft();
   saveFuturePicks();
   closeTradeModal();
@@ -3868,7 +3958,7 @@ Who wins this trade and why? Does it make strategic sense for both teams given t
 // ── ADD PROSPECT ───────────────────────────────────────────────────────
 function openAddProspectModal() {
   // Clear all fields
-  ['ap-name','ap-school','ap-height','ap-forty','ap-notes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['ap-name','ap-school','ap-height','ap-forty','ap-notes','ap-stats'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   ['ap-weight','ap-ras','ap-espn','ap-pff','ap-pfsn','ap-cbs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('ap-pos').value = '';
   document.getElementById('add-prospect-modal').style.display = 'flex';
@@ -3896,8 +3986,9 @@ function submitAddProspect() {
   const cbs = parseInt(document.getElementById('ap-cbs').value) || 999;
   const notes = document.getElementById('ap-notes').value.trim();
   const school = document.getElementById('ap-school').value.trim() || '—';
+  const statsLine = document.getElementById('ap-stats').value.trim();
 
-  PROSPECTS.push({ id: newId, name, pos, school, height, weight, forty, ras, espn, pff, pfsn, cbs, notes, arm: '—', myRank: PROSPECTS.length + 1, grade: 70 });
+  PROSPECTS.push({ id: newId, name, pos, school, height, weight, forty, ras, espn, pff, pfsn, cbs, notes, statsLine, arm: '—', myRank: PROSPECTS.length + 1, grade: 70 });
   saveProspects();
   closeAddProspectModal();
   renderBoard();
@@ -4125,6 +4216,9 @@ const LIVE_REACTIONS = [
 let LIVE_DRAFT_PICKS = {}; // { pickNum: {playerName, playerId, reaction, team} }
 let liveCurrentPick = 1;
 let liveRightTab = 'available';
+let draftClockTime = 0;
+let draftClockRunning = false;
+let draftClockInterval = null;
 let liveSelectedProspectId = null;
 let liveSelectedReaction = null;
 let livePosFilter = 'ALL';
@@ -4167,10 +4261,22 @@ function renderLiveClock() {
   const needs = TEAM_NEEDS[teamKey] || [];
   const needsBadges = needs.map(pos => `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:1px 5px;">${pos}</span>`).join(' ');
   const tc = TEAM_COLORS[teamKey] || TEAM_COLORS[teamRaw] || { text: 'var(--gold2)', bg: '#1a1400' };
+  const clockSecs = draftClockTime;
+  const clockMins = Math.floor(clockSecs / 60);
+  const clockRemSecs = clockSecs % 60;
+  const clockStr = `${clockMins}:${String(clockRemSecs).padStart(2,'0')}`;
+  const clockClass = clockSecs <= 30 ? 'clock-urgent' : clockSecs <= 90 ? 'clock-warning' : '';
   el.innerHTML = `<div class="live-clock-card" style="background:linear-gradient(135deg,${tc.bg}40 0%,#12151c 100%);border-left:3px solid ${tc.text};">
     <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;">On the Clock · Rd ${pick.round} · Pick #${pick.pick}</div>
     <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:${tc.text};line-height:1.1;">${teamRaw}</div>
     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:3px;">${needsBadges || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
+    <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+      <div class="draft-clock-display ${clockClass}">${clockStr}</div>
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:6px;">
+        <button class="clock-btn ${draftClockRunning?'clock-running':''}" onclick="toggleDraftClock(${pick.round})">${draftClockRunning ? '⏸ Pause' : '▶ Start'}</button>
+        <button class="clock-btn" onclick="resetDraftClock(${pick.round})">↺ Reset</button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -4265,6 +4371,10 @@ function submitLivePick() {
 
   liveSelectedProspectId = null;
   liveSelectedReaction = null;
+
+  // Auto-reset clock for next pick
+  const nextPick = liveMockPick(liveCurrentPick);
+  if (nextPick) resetDraftClock(nextPick.round);
 
   saveLiveDraft();
   renderLiveDraft();
@@ -4846,6 +4956,224 @@ function importAllData() {
   input.click();
 }
 
+// ── DRAFT CLOCK ───────────────────────────────────────────────────────
+function draftClockSecsForRound(round) {
+  if (round === 1) return 600;
+  if (round === 2) return 420;
+  if (round <= 6) return 300;
+  return 240;
+}
+function resetDraftClock(round) {
+  clearInterval(draftClockInterval);
+  draftClockInterval = null;
+  draftClockRunning = false;
+  draftClockTime = draftClockSecsForRound(round || 1);
+  renderLiveClock();
+}
+function toggleDraftClock(round) {
+  if (draftClockRunning) {
+    clearInterval(draftClockInterval);
+    draftClockInterval = null;
+    draftClockRunning = false;
+  } else {
+    if (!draftClockTime) draftClockTime = draftClockSecsForRound(round || 1);
+    draftClockRunning = true;
+    draftClockInterval = setInterval(() => {
+      if (draftClockTime > 0) {
+        draftClockTime--;
+        renderLiveClock();
+      } else {
+        clearInterval(draftClockInterval);
+        draftClockInterval = null;
+        draftClockRunning = false;
+        renderLiveClock();
+        showToast('⏰ Time is up!');
+      }
+    }, 1000);
+  }
+  renderLiveClock();
+}
+
+// ── REACHES & STEALS ──────────────────────────────────────────────────
+function openReachesModal() {
+  const drafted = MOCK_PICKS.filter(p => p.playerId);
+  if (!drafted.length) { showToast('No picks in the mock draft yet'); return; }
+
+  const rows = drafted.map(pick => {
+    const p = PROSPECTS.find(x => x.id === pick.playerId);
+    if (!p) return null;
+    const conRank = consensusRank(p);
+    if (conRank >= 9999) return null;
+    const delta = Math.round(conRank) - pick.pick; // positive = steal, negative = reach
+    return { pick, p, conRank: Math.round(conRank), delta };
+  }).filter(Boolean);
+
+  rows.sort((a, b) => a.delta - b.delta);
+  const reaches = rows.filter(r => r.delta < 0).slice(0, 7);
+  const steals  = rows.filter(r => r.delta > 0).reverse().slice(0, 7);
+
+  const renderRow = (r, type) => {
+    const color = type === 'reach' ? 'var(--red)' : 'var(--green)';
+    const arrow = type === 'reach' ? '▼' : '▲';
+    const label = type === 'reach' ? `Reach by ${Math.abs(r.delta)}` : `Steal by ${r.delta}`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);">
+      <span class="pos-badge pos-${r.p.pos}" style="font-size:10px;">${r.p.pos}</span>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">${r.p.name} <span style="font-size:11px;color:var(--muted);">${r.p.school}</span></div>
+        <div style="font-size:11px;color:var(--muted);">Pick #${r.pick.pick} (${r.pick.team}) · CON #${r.conRank}</div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${color};">${arrow} ${label}</div>
+    </div>`;
+  };
+
+  const section = (title, items, type) => `
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:${type==='reach'?'var(--red)':'var(--green)'};padding:12px 14px 6px;">${title}</div>
+    ${items.length ? items.map(r => renderRow(r, type)).join('') : '<div style="padding:10px 14px;font-size:12px;color:var(--muted);font-style:italic;">None</div>'}`;
+
+  document.getElementById('reaches-body').innerHTML =
+    section('🔴 Biggest Reaches', reaches, 'reach') +
+    section('🟢 Biggest Steals', steals, 'steal');
+  document.getElementById('reaches-modal').style.display = 'flex';
+}
+function closeReachesModal() { document.getElementById('reaches-modal').style.display = 'none'; }
+
+// ── TRADE LOG ─────────────────────────────────────────────────────────
+function openTradeLogModal() {
+  const el = document.getElementById('trade-log-body');
+  if (!TRADE_LOG.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;font-style:italic;text-align:center;padding:24px;">No trades executed yet.</div>';
+  } else {
+    el.innerHTML = [...TRADE_LOG].reverse().map((t, i) => {
+      const fmtPicks = (picks, futurePicks) => {
+        const cur = picks.map(n => {
+          const pick = MOCK_PICKS.find(p => p.pick === n);
+          return pick ? `Pick #${n} (Rd ${pick.round})` : `Pick #${n}`;
+        });
+        const fut = futurePicks.map(id => {
+          const fp = FUTURE_PICKS.find(p => p.id === id);
+          return fp ? `${fp.year} Rd ${fp.round}` : id;
+        });
+        return [...cur, ...fut].join(', ') || 'nothing';
+      };
+      const verdict = t.valA > t.valB
+        ? `<span style="color:var(--green);">✓ ${t.teamA} wins by ${Math.round((t.valA/t.valB-1)*100)}%</span>`
+        : t.valB > t.valA
+        ? `<span style="color:var(--green);">✓ ${t.teamB} wins by ${Math.round((t.valB/t.valA-1)*100)}%</span>`
+        : `<span style="color:var(--muted);">Even trade</span>`;
+      return `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden;">
+        <div style="background:var(--surface2);padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--gold);">Trade #${TRADE_LOG.length - i} — ${verdict}</div>
+        <div style="padding:10px 14px;font-size:12px;line-height:1.8;">
+          <div><strong>${t.teamA}</strong> gives: <span style="color:var(--muted);">${fmtPicks(t.givesA, t.futureA)}</span> <span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;">[${t.valA.toLocaleString()} pts]</span></div>
+          <div><strong>${t.teamB}</strong> gives: <span style="color:var(--muted);">${fmtPicks(t.givesB, t.futureB)}</span> <span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:11px;">[${t.valB.toLocaleString()} pts]</span></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('trade-log-modal').style.display = 'flex';
+}
+function closeTradeLogModal() { document.getElementById('trade-log-modal').style.display = 'none'; }
+
+// ── FULL REPORT ───────────────────────────────────────────────────────
+async function generateFullReport(id) {
+  const p = PROSPECTS.find(x => x.id === id);
+  if (!p) return;
+  if (!getApiKey()) { openKeyModal(); showToast('Add your API key first'); return; }
+
+  document.getElementById('full-report-title').textContent = p.name;
+  document.getElementById('full-report-body').innerHTML = '<div style="color:var(--muted);font-style:italic;padding:8px 0;">Generating scouting report…</div>';
+  document.getElementById('full-report-modal').style.display = 'flex';
+
+  const ctx = `${p.name} | ${p.pos} | ${p.school} | ${p.height}, ${p.weight}lbs, 40: ${p.forty}s | RAS: ${p.ras > 0 ? p.ras.toFixed(2) : 'N/A'} | Grade: ${computeGrade(p)}/100 | B/R: #${p.espn} | PFF: #${p.pff} | PFSN: #${p.pfsn} | CBS: #${p.cbs} | My rank: #${PROSPECTS.indexOf(p)+1}${p.statsLine ? ` | Stats: ${p.statsLine}` : ''}${p.notes ? ` | Notes: ${p.notes}` : ''}`;
+
+  const prompt = `Generate a complete pre-draft scouting report for this NFL prospect. Structure your response with these exact sections:
+
+**OVERVIEW** — 2-sentence summary of who this player is and their draft profile.
+**TOP STRENGTHS** — 3 specific strengths with detail.
+**CONCERNS / RED FLAGS** — weaknesses, scheme fits, character/off-field issues if any. Be honest.
+**NFL COMPARISON** — one current or recent NFL player comp and why.
+**BEST TEAM FIT** — 2-3 specific NFL teams and exactly why they fit.
+**PROJECTION** — round projection and reasoning.
+
+Prospect data: ${ctx}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': getApiKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 1200,
+        system: 'You are an expert NFL draft analyst. Give specific, honest, football-focused analysis. Do not be generic. Use real names of teams, coaches, players. Include off-field/character notes if relevant.',
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    const data = await res.json();
+    const text = data.error ? `⚠️ ${data.error.message}` : (data.content?.[0]?.text || 'No response.');
+    // Simple markdown-like bold rendering
+    const html = text
+      .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--gold);">$1</strong>')
+      .replace(/\n\n/g, '</p><p style="margin:0 0 10px;">')
+      .replace(/\n/g, '<br>');
+    document.getElementById('full-report-body').innerHTML = `<p style="margin:0 0 10px;">${html}</p>`;
+  } catch(err) {
+    document.getElementById('full-report-body').textContent = `⚠️ ${err.message}`;
+  }
+}
+function closeFullReportModal() { document.getElementById('full-report-modal').style.display = 'none'; }
+
+// ── PRINT BOARD ───────────────────────────────────────────────────────
+function printBoard() {
+  const rows = PROSPECTS.map((p, i) => {
+    const rank = i + 1;
+    const con = consensusRank(p);
+    const conStr = con < 9999 ? Math.round(con) : '—';
+    const espnStr = p.espn > 0 && p.espn < 999 ? p.espn : '—';
+    const pffStr  = p.pff  > 0 && p.pff  < 999 ? p.pff  : '—';
+    const pfsnStr = p.pfsn > 0 && p.pfsn < 999 ? p.pfsn : '—';
+    const cbsStr  = p.cbs  > 0 && p.cbs  < 999 ? p.cbs  : '—';
+    return `<tr>
+      <td style="text-align:center;font-weight:700;">${rank}</td>
+      <td><strong>${p.name}</strong></td>
+      <td style="text-align:center;">${p.pos}</td>
+      <td>${p.school}</td>
+      <td style="text-align:center;">${computeGrade(p)}</td>
+      <td style="text-align:center;">${conStr}</td>
+      <td style="text-align:center;">${espnStr}</td>
+      <td style="text-align:center;">${pffStr}</td>
+      <td style="text-align:center;">${pfsnStr}</td>
+      <td style="text-align:center;">${cbsStr}</td>
+      <td style="text-align:center;">${p.height}</td>
+      <td style="text-align:center;">${p.weight > 0 ? p.weight : '—'}</td>
+      <td style="max-width:200px;font-size:10px;">${p.notes || ''}</td>
+    </tr>`;
+  }).join('');
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>NFL Draft War Room — Big Board</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11px; margin: 20px; color: #000; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h2 { font-size: 12px; color: #555; font-weight: normal; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #1a1a1a; color: #fff; padding: 6px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
+  td { padding: 5px 8px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+  @media print { body { margin: 10px; } }
+</style></head><body>
+<h1>🏈 NFL Draft War Room — 2026 Big Board</h1>
+<h2>Printed ${new Date().toLocaleDateString()} · ${PROSPECTS.length} prospects</h2>
+<table>
+  <thead><tr>
+    <th>#</th><th>Name</th><th>Pos</th><th>School</th>
+    <th>Grade</th><th>CON</th><th>B/R</th><th>PFF</th><th>PFSN</th><th>CBS</th>
+    <th>Ht</th><th>Wt</th><th>Notes</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`);
+  win.document.close();
+}
+
 // ── INIT ─────────────────────────────────────────────────────────────
 (async () => {
   const boardId = new URLSearchParams(location.search).get('board');
@@ -4915,6 +5243,39 @@ function importAllData() {
   if (getApiKey()) { document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
 })();
 </script>
+
+<!-- REACHES & STEALS MODAL -->
+<div id="reaches-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeReachesModal()">
+  <div class="modal-box" style="max-width:700px;">
+    <div class="modal-header">
+      <h2>🎯 Reaches &amp; Steals</h2>
+      <button class="modal-close" onclick="closeReachesModal()">✕ Close</button>
+    </div>
+    <div id="reaches-body" style="padding:20px;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
+<!-- TRADE LOG MODAL -->
+<div id="trade-log-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeTradeLogModal()">
+  <div class="modal-box" style="max-width:620px;">
+    <div class="modal-header">
+      <h2>📋 Trade Log</h2>
+      <button class="modal-close" onclick="closeTradeLogModal()">✕ Close</button>
+    </div>
+    <div id="trade-log-body" style="padding:20px;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
+<!-- FULL REPORT MODAL -->
+<div id="full-report-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeFullReportModal()">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-header">
+      <div id="full-report-title" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--gold);"></div>
+      <button class="modal-close" onclick="closeFullReportModal()">✕ Close</button>
+    </div>
+    <div id="full-report-body" style="padding:20px;overflow-y:auto;max-height:75vh;line-height:1.7;font-size:13px;"></div>
+  </div>
+</div>
 
 <span class="info-tip">
   <span class="info-tip-icon">?</span>
