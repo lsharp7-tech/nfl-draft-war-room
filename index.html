@@ -2965,44 +2965,145 @@ function isMyPick(pick) {
   return myMockTeam && pickOwner(pick) === myMockTeam;
 }
 
-function simulateSinglePick(pick) {
+// Position value premium — how much teams overpay to move up for each position
+const SIM_POS_PREMIUM = { QB:2.8, OT:1.7, EDGE:1.6, CB:1.5, WR:1.4, TE:1.25, DT:1.2, LB:1.1, S:1.1, RB:1.0, IOL:1.0, C:1.0 };
+
+// Attempt a simulated trade-up before a pick is made.
+// Returns { tradingUpTeam, tradingDownTeam, target } if a trade happened, null otherwise.
+function attemptSimTrade(pickIndex) {
+  const pick = MOCK_PICKS[pickIndex];
+  const round = pick.round;
+
+  // Trade probability by round — more common early, rare late
+  const prob = [0, 0.22, 0.17, 0.12, 0.07, 0.04, 0.02, 0.01][round] || 0.01;
+  if (Math.random() > prob) return null;
+
+  // What players are available right now?
+  const draftedIds = new Set(MOCK_PICKS.filter(p => p.playerId).map(p => p.playerId));
+  const available = [...PROSPECTS]
+    .filter(p => !draftedIds.has(p.id))
+    .sort((a, b) => computeGrade(b) - computeGrade(a));
+  if (available.length < 4) return null;
+
+  // Consider top players as potential trade targets (top 4 in round 1, top 8 later)
+  const targetPool = available.slice(0, round <= 2 ? 4 : 8);
+  const target = targetPool[Math.floor(Math.random() * targetPool.length)];
+  const posPrem = SIM_POS_PREMIUM[target.pos] || 1.0;
+
+  // Would the team on the clock keep this pick?
+  const currentOwner = pickOwner(pick);
+  const currentNeeds = TEAM_NEEDS[currentOwner] || [];
+  const currentWantsTarget = currentNeeds.includes(target.pos);
+  // Teams strongly need their QB — almost never trade down if one is available
+  if (currentWantsTarget && target.pos === 'QB') return null;
+  // Otherwise 65% chance they keep it if they need the position
+  if (currentWantsTarget && Math.random() < 0.65) return null;
+
+  // Build a map of all later unfilled picks by owner
+  const laterPicks = MOCK_PICKS.slice(pickIndex + 1).filter(p => !p.playerId);
+  if (!laterPicks.length) return null;
+  const teamPicksMap = {};
+  laterPicks.forEach(p => {
+    const owner = pickOwner(p);
+    if (!teamPicksMap[owner]) teamPicksMap[owner] = [];
+    teamPicksMap[owner].push(p);
+  });
+
+  const pickVal = pickTradeValue(pick.pick);
+  // Max gap a team will jump: big in round 1, tighter later
+  const maxGap = round === 1 ? 31 : round === 2 ? 20 : round === 3 ? 14 : 8;
+
+  // Find teams that need this position and can afford to trade up
+  const candidates = Object.entries(teamPicksMap).filter(([team, picks]) => {
+    if (team === currentOwner) return false;
+    const needs = TEAM_NEEDS[team] || [];
+    if (!needs.includes(target.pos)) return false;
+    const gap = picks[0].pick - pick.pick;
+    if (gap <= 0 || gap > maxGap) return false;
+    // Can they assemble enough value? (two picks max)
+    const canOffer = pickTradeValue(picks[0].pick) +
+      (picks.length > 1 ? pickTradeValue(picks[1].pick) : 0);
+    // Must cover at least 75% of the premium-adjusted value
+    return canOffer >= pickVal * posPrem * 0.75;
+  });
+
+  if (!candidates.length) return null;
+
+  // Pick a random candidate, biased toward premium positions (teams pay up)
+  const [tradingUpTeam, tradingUpPicks] = candidates[Math.floor(Math.random() * candidates.length)];
+  const tradingDownTeam = currentOwner;
+
+  // Build the offer package — use minimum picks needed to reach fair value
+  const offer1 = tradingUpPicks[0];
+  let totalOffer = pickTradeValue(offer1.pick);
+  let offer2 = null;
+  if (totalOffer < pickVal * posPrem * 0.88 && tradingUpPicks.length > 1) {
+    offer2 = tradingUpPicks[1];
+    totalOffer += pickTradeValue(offer2.pick);
+  }
+
+  // Execute: swap ownership
+  pick.owner = tradingUpTeam;
+  offer1.owner = tradingDownTeam;
+  if (offer2) offer2.owner = tradingDownTeam;
+
+  // Log it
+  TRADE_LOG.push({
+    teamA: tradingUpTeam, teamB: tradingDownTeam,
+    givesA: offer2 ? [offer1.pick, offer2.pick] : [offer1.pick],
+    givesB: [pick.pick],
+    futureA: [], futureB: [],
+    valA: totalOffer, valB: pickVal,
+    ts: Date.now(), simulated: true,
+  });
+
+  return { tradingUpTeam, tradingDownTeam, target };
+}
+
+function simulateSinglePick(pick, forcedTarget) {
   const draftedIds = new Set(MOCK_PICKS.filter(p => p.playerId).map(p => p.playerId));
   const teamNeeds = TEAM_NEEDS[pickOwner(pick)] || [];
-  let available = [...PROSPECTS].filter(p => !draftedIds.has(p.id))
+  const available = [...PROSPECTS]
+    .filter(p => !draftedIds.has(p.id))
     .sort((a, b) => computeGrade(b) - computeGrade(a));
   if (!available.length) return;
-  // 60% chance team picks for need if a need player is available in the pool
-  const poolSize = Math.min(available.length, pick.round * 3);
+
+  // If the pick was acquired via a trade for a specific player, take that player 85% of the time
+  if (forcedTarget && !draftedIds.has(forcedTarget.id) && Math.random() < 0.85) {
+    pick.playerId = forcedTarget.id;
+    pick.simulated = true;
+    return;
+  }
+
+  const poolSize = Math.min(available.length, Math.max(3, pick.round * 3));
   const pool = available.slice(0, poolSize);
   const needPool = pool.filter(p => teamNeeds.includes(p.pos));
-  if (needPool.length && Math.random() < 0.6) {
-    pick.playerId = needPool[Math.floor(Math.random() * needPool.length)].id;
-  } else {
-    pick.playerId = pool[Math.floor(Math.random() * pool.length)].id;
-  }
+  pick.playerId = (needPool.length && Math.random() < 0.62)
+    ? needPool[Math.floor(Math.random() * needPool.length)].id
+    : pool[Math.floor(Math.random() * pool.length)].id;
   pick.simulated = true;
 }
 
 function simulateToMyPick() {
   if (!myMockTeam) return;
-  // Find first unfilled pick
   const nextUnfilled = MOCK_PICKS.find(p => !p.playerId);
   if (!nextUnfilled) { showToast('All picks have been made'); return; }
-  // Simulate all picks up to (but not including) the next user pick
+  let simTrades = 0;
   for (const pick of MOCK_PICKS) {
     if (pick.playerId) continue;
-    if (isMyPick(pick)) {
-      selectedMockPick = pick.pick;
-      break;
-    }
-    simulateSinglePick(pick);
+    if (isMyPick(pick)) { selectedMockPick = pick.pick; break; }
+    const idx = MOCK_PICKS.indexOf(pick);
+    const tradeResult = attemptSimTrade(idx);
+    if (tradeResult) simTrades++;
+    simulateSinglePick(pick, tradeResult?.target || null);
   }
   saveMockDraft();
   renderMockDraft();
   renderBoard();
   const nextMine = MOCK_PICKS.find(p => isMyPick(p) && !p.playerId);
   if (nextMine) {
-    showToast(`Your turn: Pick #${nextMine.pick} · ${nextMine.team}`);
+    const tradeNote = simTrades ? ` · ${simTrades} trade${simTrades > 1 ? 's' : ''} happened — check Trade Log` : '';
+    showToast(`Your turn: Pick #${nextMine.pick} · ${nextMine.team}${tradeNote}`);
   } else {
     showToast('All your picks have been made!');
     setTimeout(openDraftSummary, 600);
@@ -3012,11 +3113,18 @@ function simulateToMyPick() {
 function simAllRemaining() {
   const remaining = MOCK_PICKS.filter(p => !p.playerId);
   if (!remaining.length) { showToast('All picks already made'); return; }
-  remaining.forEach(simulateSinglePick);
+  let simTrades = 0;
+  remaining.forEach(pick => {
+    const idx = MOCK_PICKS.indexOf(pick);
+    const tradeResult = attemptSimTrade(idx);
+    if (tradeResult) simTrades++;
+    simulateSinglePick(pick, tradeResult?.target || null);
+  });
   saveMockDraft();
   renderMockDraft();
   renderBoard();
-  showToast(`Simulated ${remaining.length} remaining picks`);
+  const tradeNote = simTrades ? ` · ${simTrades} sim trade${simTrades > 1 ? 's' : ''} — check Trade Log` : '';
+  showToast(`Simulated ${remaining.length} picks${tradeNote}`);
 }
 
 function undoLastPick() {
