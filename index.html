@@ -1118,6 +1118,12 @@ function renderBoard() {
 }
 
 // ── DRAG & DROP ──────────────────────────────────────────────────────
+let _dragScrollInterval = null;
+
+function _stopDragScroll() {
+  if (_dragScrollInterval) { clearInterval(_dragScrollInterval); _dragScrollInterval = null; }
+}
+
 function onDragStart(e) {
   dragSrcIdx = +e.currentTarget.dataset.origIdx;
   e.currentTarget.classList.add('dragging');
@@ -1127,9 +1133,24 @@ function onDragOver(e) {
   e.preventDefault();
   document.querySelectorAll('.prospect-row').forEach(r => r.classList.remove('drag-over'));
   e.currentTarget.classList.add('drag-over');
+
+  // Auto-scroll the board panel when dragging near the top or bottom edge
+  const panel = document.getElementById('board-panel');
+  if (!panel) return;
+  const rect = panel.getBoundingClientRect();
+  const zone = 80; // px from edge to trigger scroll
+  const speed = 12; // px per tick
+  const y = e.clientY;
+  _stopDragScroll();
+  if (y < rect.top + zone) {
+    _dragScrollInterval = setInterval(() => panel.scrollTop -= speed, 16);
+  } else if (y > rect.bottom - zone) {
+    _dragScrollInterval = setInterval(() => panel.scrollTop += speed, 16);
+  }
 }
 function onDrop(e) {
   e.preventDefault();
+  _stopDragScroll();
   const destIdx = +e.currentTarget.dataset.origIdx;
   if (dragSrcIdx === null || dragSrcIdx === destIdx) return;
   const [moved] = PROSPECTS.splice(dragSrcIdx, 1);
@@ -1139,6 +1160,7 @@ function onDrop(e) {
   showToast(`${moved.name} moved to #${destIdx + 1}`);
 }
 function onDragEnd(e) {
+  _stopDragScroll();
   e.currentTarget.classList.remove('dragging');
   document.querySelectorAll('.prospect-row').forEach(r => r.classList.remove('drag-over'));
   dragSrcIdx = null;
