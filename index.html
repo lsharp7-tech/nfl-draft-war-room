@@ -386,12 +386,6 @@
   </div>
 </header>
 
-<!-- SHARED BOARD BANNER -->
-<div id="shared-banner" style="display:none;background:#0a1a0a;border-bottom:1px solid var(--green);padding:8px 20px;align-items:center;gap:12px;font-size:12px;flex-shrink:0;">
-  <span style="color:var(--green);font-weight:600;">👁 Viewing a shared board · Read-only</span>
-  <button class="btn btn-outline" style="font-size:11px;padding:4px 10px;border-color:var(--green);color:var(--green);" onclick="importSharedBoard()">⬇ Import to My Board</button>
-  <button onclick="dismissSharedBoard()" style="background:none;border:none;color:var(--muted);cursor:pointer;margin-left:auto;font-size:16px;line-height:1;">✕</button>
-</div>
 
 <div class="tabs">
   <div class="tab active" onclick="switchView('board',this)">📋 My Big Board</div>
@@ -2281,8 +2275,6 @@ function clearGithubToken() {
 }
 
 // ── SHARE BOARD ───────────────────────────────────────────────────────
-let VIEWING_SHARED = false;
-let _sharedProspects = null; // holds data for potential import
 
 function openShareModal() { document.getElementById('share-modal').style.display = 'flex'; }
 function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
@@ -2297,7 +2289,7 @@ async function shareBoard() {
   openShareModal();
   document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--muted);font-size:13px;">Uploading ${PROSPECTS.length} prospects…</div>`;
   try {
-    const FIELDS = ['id','name','pos','school','height','weight','forty','arm','grade','myRank','espn','pff','pfsn','cbs','ras','notes'];
+    const FIELDS = ['id','name','pos','school','height','weight','forty','arm','grade','myRank','espn','pff','pfsn','cbs','ras','notes','statsLine'];
     const payload = {
       v: 1,
       f: FIELDS,
@@ -2315,13 +2307,14 @@ async function shareBoard() {
     const url = `${location.origin}${location.pathname}?board=${gist.id}`;
     document.getElementById('share-modal-body').innerHTML = `
       <div style="padding:20px;">
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Anyone with this link can view your board (read-only) — no account needed:</div>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <div style="font-size:13px;color:var(--text);margin-bottom:6px;font-weight:600;">Your board is ready to share.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">Anyone who opens this link gets their own independent copy — they can edit it freely and it will <strong style="color:var(--text);">never affect your board</strong>.</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
           <input id="share-url-out" readonly value="${url}"
             style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;">
           <button class="btn btn-gold" onclick="copyShareUrl()">Copy</button>
         </div>
-        <div style="font-size:11px;color:var(--muted);">✓ ${PROSPECTS.length} prospects saved</div>
+        <div style="font-size:11px;color:var(--muted);">✓ ${PROSPECTS.length} prospects uploaded · No account needed to open the link</div>
       </div>`;
   } catch(e) {
     document.getElementById('share-modal-body').innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px;">Failed: ${e.message}<br><br><span style="color:var(--muted);font-size:11px;">Make sure your GitHub token has the <strong>gist</strong> scope.</span></div>`;
@@ -2334,29 +2327,6 @@ function copyShareUrl() {
   navigator.clipboard.writeText(el.value).then(() => showToast('✓ Link copied to clipboard!')).catch(() => { el.select(); document.execCommand('copy'); showToast('✓ Copied!'); });
 }
 
-function updateSharedBanner(show) {
-  const el = document.getElementById('shared-banner');
-  if (el) el.style.display = show ? 'flex' : 'none';
-}
-
-function dismissSharedBoard() {
-  updateSharedBanner(false);
-}
-
-function importSharedBoard() {
-  if (!_sharedProspects) return;
-  if (!confirm(`Import this shared board? This will replace your current ${PROSPECTS.length} prospects.`)) return;
-  VIEWING_SHARED = false;
-  PROSPECTS = _sharedProspects.prospects || PROSPECTS;
-  TIERS = _sharedProspects.tiers || TIERS;
-  _sharedProspects = null;
-  saveProspects();
-  saveTiers();
-  updateSharedBanner(false);
-  history.replaceState({}, '', location.pathname + location.search);
-  renderBoard();
-  showToast(`✓ Board imported — ${PROSPECTS.length} prospects loaded`);
-}
 
 // ── EXPORT CSV ───────────────────────────────────────────────────────
 function fmtHeight(h) {
@@ -3739,7 +3709,6 @@ Using your knowledge of the ${team}'s current roster, key players, and head coac
 
 // ── PERSISTENCE ──────────────────────────────────────────────────────
 function saveProspects() {
-  if (VIEWING_SHARED) return;
   try { localStorage.setItem('nfl_prospects', JSON.stringify(PROSPECTS)); } catch(e) {}
 }
 
@@ -5321,10 +5290,37 @@ function printBoard() {
         throw new Error('Unrecognized board format');
       }
       if (!prospects.length) throw new Error('Gist had 0 prospects');
-      _sharedProspects = { prospects, tiers };
+
+      // Check if this person already has their own board saved
+      const existing = localStorage.getItem('nfl_prospects');
+      const existingCount = existing ? JSON.parse(existing).length : 0;
+      if (existingCount > 0) {
+        const go = confirm(`You already have a board with ${existingCount} prospects.\n\nLoad the shared board as your own copy? (Your current board will be replaced — back it up first via Data → Backup if needed.)`);
+        if (!go) {
+          // Keep their existing board, strip the URL param
+          history.replaceState({}, '', location.pathname);
+          loadProspects();
+          loadTiers();
+          loadMockDraft();
+          initFuturePicks();
+          loadFuturePicks();
+          loadLiveDraft();
+          loadWatchlist();
+          loadBoardLock();
+          renderBoard();
+          if (getApiKey()) { document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
+          return;
+        }
+      }
+
+      // Import as their own independent copy
       PROSPECTS = prospects;
       TIERS = tiers;
-      VIEWING_SHARED = true;
+      saveProspects();
+      saveTiers();
+      history.replaceState({}, '', location.pathname); // clean up URL
+      setTimeout(() => showToast(`✅ Shared board loaded — ${prospects.length} prospects. This is your own copy, edit freely!`), 400);
+
     } catch(e) {
       setTimeout(() => {
         const el = document.createElement('div');
@@ -5347,7 +5343,6 @@ function printBoard() {
   loadWatchlist();
   loadBoardLock();
   renderBoard();
-  if (VIEWING_SHARED) updateSharedBanner(true);
   if (getApiKey()) { document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
 })();
 </script>
