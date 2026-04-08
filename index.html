@@ -518,6 +518,7 @@
       <button class="btn btn-outline" onclick="exportMockDraft()">⬇ Export Draft</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openReachesModal()">🎯 Reaches & Steals</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openTradeLogModal()">📋 Trade Log</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openTeamDraftModal()">👥 Team View</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
     </div>
   </div>
@@ -2768,7 +2769,7 @@ function renderMockPicks() {
       <div style="flex:1;min-width:0;">
         <div class="mock-team">${currentOwner}${myBadge}${viaBadge}</div>
         ${p
-          ? `<div class="mock-player-name">${p.name} <span class="mock-player-pos">${p.pos}</span></div>${nextBadge}`
+          ? `<div class="mock-player-name" onclick="event.stopPropagation();openMockProfile(${p.id})" style="cursor:pointer;" title="View profile">${p.name} <span class="mock-player-pos">${p.pos}</span></div>${nextBadge}`
           : `<div class="mock-empty">— No selection —</div>`}
       </div>
       ${p ? `<button class="mock-remove" onclick="event.stopPropagation();removeMockPick(${pick.pick})" title="Remove">✕</button>` : ''}
@@ -3127,7 +3128,10 @@ function simulateToMyPick() {
   const nextMine = MOCK_PICKS.find(p => isMyPick(p) && !p.playerId);
   if (nextMine) {
     const tradeNote = simTrades ? ` · ${simTrades} trade${simTrades > 1 ? 's' : ''} happened — check Trade Log` : '';
-    showToast(`Your turn: Pick #${nextMine.pick} · ${nextMine.team}${tradeNote}`);
+    // Check if a CPU team wants to trade up for our pick — show offer if so
+    if (!checkForCPUTradeOffer(nextMine)) {
+      showToast(`Your turn: Pick #${nextMine.pick} · ${nextMine.team}${tradeNote}`);
+    }
   } else {
     showToast('All your picks have been made!');
     setTimeout(openDraftSummary, 600);
@@ -5204,6 +5208,229 @@ function openTradeLogModal() {
 }
 function closeTradeLogModal() { document.getElementById('trade-log-modal').style.display = 'none'; }
 
+// ── TEAM DRAFT VIEW ───────────────────────────────────────────────────
+function openTeamDraftModal() {
+  const sel = document.getElementById('team-draft-select');
+  const teams = getTeamList();
+  sel.innerHTML = '<option value="">— Select a team —</option>' +
+    teams.map(t => `<option value="${t}" ${t === myMockTeam ? 'selected' : ''}>${t}</option>`).join('');
+  document.getElementById('team-draft-modal').style.display = 'flex';
+  renderTeamDraftView();
+}
+function closeTeamDraftModal() { document.getElementById('team-draft-modal').style.display = 'none'; }
+
+function renderTeamDraftView() {
+  const team = document.getElementById('team-draft-select').value;
+  const body = document.getElementById('team-draft-body');
+  const gradeEl = document.getElementById('team-draft-grade');
+  if (!team) { body.innerHTML = '<div style="color:var(--muted);text-align:center;padding:40px;">Select a team above</div>'; gradeEl.textContent = ''; return; }
+
+  const teamPicks = MOCK_PICKS.filter(p => pickOwner(p) === team);
+  const filledPicks = teamPicks.filter(p => p.playerId);
+  const needs = TEAM_NEEDS[team] || [];
+
+  if (!filledPicks.length) {
+    body.innerHTML = '<div style="color:var(--muted);text-align:center;padding:40px;">No picks made yet for this team</div>';
+    gradeEl.textContent = '';
+    return;
+  }
+
+  // Grade the draft class
+  const grades = filledPicks.map(pk => {
+    const p = PROSPECTS.find(x => x.id === pk.playerId);
+    return p ? computeGrade(p) : 0;
+  }).filter(g => g > 0);
+  const avgGrade = grades.length ? grades.reduce((a,b)=>a+b,0)/grades.length : 0;
+  const letter = avgGrade >= 92 ? 'A+' : avgGrade >= 87 ? 'A' : avgGrade >= 82 ? 'A-' : avgGrade >= 78 ? 'B+' : avgGrade >= 74 ? 'B' : avgGrade >= 70 ? 'B-' : avgGrade >= 65 ? 'C+' : 'C';
+  const gradeColor = avgGrade >= 85 ? 'var(--green)' : avgGrade >= 74 ? 'var(--gold)' : '#e05252';
+  gradeEl.innerHTML = `<span style="color:${gradeColor};">${letter}</span>`;
+
+  // Needs addressed
+  const positionsDrafted = filledPicks.map(pk => { const p = PROSPECTS.find(x => x.id === pk.playerId); return p?.pos; }).filter(Boolean);
+  const needsHit = needs.filter(n => positionsDrafted.includes(n));
+  const needsMissed = needs.filter(n => !positionsDrafted.includes(n));
+
+  let html = '';
+
+  // Needs summary
+  if (needs.length) {
+    html += `<div style="margin-bottom:16px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Team Needs</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${needs.map(n => {
+          const hit = needsHit.includes(n);
+          return `<span class="pos-badge pos-${n}" style="font-size:10px;padding:2px 7px;opacity:${hit?1:0.45};position:relative;" title="${hit?'Addressed':'Not addressed'}">${n}${hit?' ✓':''}</span>`;
+        }).join('')}
+      </div>
+      ${needsMissed.length ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">Unaddressed: ${needsMissed.join(', ')}</div>` : '<div style="font-size:11px;color:var(--green);margin-top:6px;">All needs addressed ✓</div>'}
+    </div>`;
+  }
+
+  // Picks list
+  html += filledPicks.map(pk => {
+    const p = PROSPECTS.find(x => x.id === pk.playerId);
+    if (!p) return '';
+    const g = computeGrade(p);
+    const myRank = PROSPECTS.indexOf(p) + 1;
+    const pickVal = pickTradeValue(pk.pick);
+    const fillsNeed = needs.includes(p.pos);
+    const via = pk.owner ? `<span class="trade-via-badge" style="font-size:9px;">via ${pk.team.replace(/\s*\(via[^)]*\)/i,'').trim()}</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="closeTeamDraftModal();openMockProfile(${p.id})">
+      <div style="text-align:center;min-width:38px;">
+        <div style="font-size:10px;color:var(--muted);">Rd ${pk.round}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--text);">#${pk.pick}</div>
+      </div>
+      <span class="pos-badge pos-${p.pos}" style="font-size:10px;padding:2px 6px;">${p.pos}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${p.name} ${fillsNeed ? '<span style="color:var(--green);font-size:10px;">✓ Need</span>' : ''}${via}</div>
+        <div style="font-size:11px;color:var(--muted);">${p.school} · My Board: #${myRank}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:${getGradeColor(g)}">${g}</div>
+        <div style="font-size:10px;color:var(--muted);">${pickVal.toLocaleString()} pts</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  html += `<div style="margin-top:14px;font-size:11px;color:var(--muted);text-align:center;">Click any row to view player profile</div>`;
+  body.innerHTML = html;
+}
+
+// ── CPU TRADE OFFERS ──────────────────────────────────────────────────
+let _pendingCPUTrade = null; // { offeringTeam, myPick, offer1, offer2, target, totalVal, myVal }
+
+function checkForCPUTradeOffer(myPickObj) {
+  if (!myMockTeam || !myPickObj) return false;
+  const round = myPickObj.round;
+
+  // Probability by round — rare but realistic. Highest in rounds 1-2.
+  const prob = [0, 0.28, 0.20, 0.12, 0.06, 0.03, 0.01, 0.00][round] || 0;
+  if (Math.random() > prob) return false;
+
+  const draftedIds = new Set(MOCK_PICKS.filter(p => p.playerId).map(p => p.playerId));
+  const available = [...PROSPECTS].filter(p => !draftedIds.has(p.id)).sort((a,b) => computeGrade(b) - computeGrade(a));
+  if (available.length < 3) return false;
+
+  // Find the best available player — this is what the offering team covets
+  const targetPool = available.slice(0, round <= 2 ? 5 : 10);
+  const target = targetPool[Math.floor(Math.random() * targetPool.length)];
+  const posPrem = SIM_POS_PREMIUM[target.pos] || 1.0;
+  const myPickVal = pickTradeValue(myPickObj.pick);
+
+  // Build map of later picks by team (only CPU teams)
+  const laterPicks = MOCK_PICKS.filter(p => p.pick > myPickObj.pick && !p.playerId && pickOwner(p) !== myMockTeam);
+  if (!laterPicks.length) return false;
+  const teamPicksMap = {};
+  laterPicks.forEach(p => {
+    const owner = pickOwner(p);
+    if (!teamPicksMap[owner]) teamPicksMap[owner] = [];
+    teamPicksMap[owner].push(p);
+  });
+
+  // Find teams that need the top available player and can pay up
+  const maxGap = round === 1 ? 25 : round === 2 ? 18 : 12;
+  const candidates = Object.entries(teamPicksMap).filter(([team, picks]) => {
+    const needs = TEAM_NEEDS[team] || [];
+    if (!needs.includes(target.pos)) return false;
+    const gap = picks[0].pick - myPickObj.pick;
+    if (gap <= 0 || gap > maxGap) return false;
+    // Don't offer if the team could still get the player naturally
+    if (gap <= 3) return false; // too close, no need to trade
+    const canOffer = pickTradeValue(picks[0].pick) + (picks.length > 1 ? pickTradeValue(picks[1].pick) : 0);
+    return canOffer >= myPickVal * Math.min(posPrem, 1.5) * 0.80;
+  });
+
+  if (!candidates.length) return false;
+
+  const [offeringTeam, offeringPicks] = candidates[Math.floor(Math.random() * candidates.length)];
+  const offer1 = offeringPicks[0];
+  let offer2 = null;
+  let totalOffer = pickTradeValue(offer1.pick);
+
+  // Add second pick if needed to make it fair
+  if (totalOffer < myPickVal * Math.min(posPrem, 1.4) * 0.90 && offeringPicks.length > 1) {
+    offer2 = offeringPicks[1];
+    totalOffer += pickTradeValue(offer2.pick);
+  }
+
+  // Don't show obviously bad offers — must cover at least 85% of value
+  if (totalOffer < myPickVal * 0.85) return false;
+
+  _pendingCPUTrade = { offeringTeam, myPick: myPickObj, offer1, offer2, target, totalOffer, myVal: myPickVal };
+  showCPUTradeOfferModal();
+  return true;
+}
+
+function showCPUTradeOfferModal() {
+  const { offeringTeam, myPick, offer1, offer2, target, totalOffer, myVal } = _pendingCPUTrade;
+  const fairness = totalOffer / myVal;
+  const fairLabel = fairness >= 1.1 ? '<span style="color:var(--green);">Overpay — great value for you</span>'
+    : fairness >= 0.95 ? '<span style="color:var(--gold);">Fair deal</span>'
+    : '<span style="color:#e05252;">Slight underpay — you give up edge</span>';
+
+  const offerPicks = [offer1, offer2].filter(Boolean).map(p =>
+    `<div style="padding:8px 12px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);">
+      <span style="font-family:'DM Mono',monospace;font-weight:700;">Pick #${p.pick}</span>
+      <span style="color:var(--muted);font-size:12px;"> · Rd ${p.round} · ${pickTradeValue(p.pick).toLocaleString()} pts</span>
+    </div>`
+  ).join('');
+
+  const needs = TEAM_NEEDS[offeringTeam] || [];
+  const p = PROSPECTS.find(x => x.id === target.id);
+
+  document.getElementById('cpu-trade-offer-body').innerHTML = `
+    <div style="margin-bottom:14px;font-size:13px;line-height:1.7;color:var(--text);">
+      The <strong style="color:var(--gold);">${offeringTeam}</strong> want to trade up to your pick
+      <strong>#${myPick.pick}</strong> (Rd ${myPick.round}).
+      ${needs.includes(target.pos) ? `They need a <strong>${target.pos}</strong> and ${p ? `<strong>${p.name}</strong> is still on the board.` : 'a premium player is still available.'}` : `They're targeting a <strong>${target.pos}</strong>.`}
+    </div>
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">${offeringTeam} Offers You</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">${offerPicks}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Total offer: ${totalOffer.toLocaleString()} pts</div>
+    </div>
+    <div style="margin-bottom:14px;padding:10px 14px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">You Give Up</div>
+      <div style="font-family:'DM Mono',monospace;font-weight:700;">Pick #${myPick.pick} <span style="color:var(--muted);font-size:12px;">· ${myVal.toLocaleString()} pts</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">You move to: Pick #${offer1.pick}${offer2 ? ` + #${offer2.pick}` : ''}</div>
+    </div>
+    <div style="font-size:12px;">${fairLabel}</div>`;
+
+  document.getElementById('cpu-trade-offer-modal').style.display = 'flex';
+}
+
+function acceptCPUTradeOffer() {
+  if (!_pendingCPUTrade) return;
+  const { offeringTeam, myPick, offer1, offer2, totalOffer, myVal } = _pendingCPUTrade;
+  document.getElementById('cpu-trade-offer-modal').style.display = 'none';
+
+  // Execute the trade
+  myPick.owner = offeringTeam;
+  offer1.owner = myMockTeam;
+  if (offer2) offer2.owner = myMockTeam;
+
+  TRADE_LOG.push({
+    teamA: myMockTeam, teamB: offeringTeam,
+    givesA: [myPick.pick],
+    givesB: offer2 ? [offer1.pick, offer2.pick] : [offer1.pick],
+    futureA: [], futureB: [],
+    valA: myVal, valB: totalOffer,
+    ts: Date.now(), simulated: false,
+  });
+
+  saveMockDraft();
+  showToast(`✅ Trade accepted — ${offeringTeam} now has Pick #${myPick.pick}. You gained Pick #${offer1.pick}${offer2 ? ` + #${offer2.pick}` : ''}`);
+  _pendingCPUTrade = null;
+  simulateToMyPick();
+}
+
+function declineCPUTradeOffer() {
+  document.getElementById('cpu-trade-offer-modal').style.display = 'none';
+  _pendingCPUTrade = null;
+  // User makes their pick normally — nothing changes
+  renderMockDraft();
+}
+
 // ── FULL REPORT ───────────────────────────────────────────────────────
 async function generateFullReport(id) {
   const p = PROSPECTS.find(x => x.id === id);
@@ -5420,6 +5647,37 @@ function printBoard() {
       <button class="modal-close" onclick="closeTradeLogModal()">✕ Close</button>
     </div>
     <div id="trade-log-body" style="padding:20px;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
+<!-- TEAM DRAFT VIEW MODAL -->
+<div id="team-draft-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeTeamDraftModal()">
+  <div class="modal-box" style="max-width:680px;">
+    <div class="modal-header">
+      <h2>👥 Team Draft View</h2>
+      <button class="modal-close" onclick="closeTeamDraftModal()">✕ Close</button>
+    </div>
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <select id="team-draft-select" onchange="renderTeamDraftView()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 12px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;cursor:pointer;flex:1;min-width:160px;">
+        <option value="">— Select a team —</option>
+      </select>
+      <div id="team-draft-grade" style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;"></div>
+    </div>
+    <div id="team-draft-body" style="padding:20px;overflow-y:auto;max-height:65vh;"></div>
+  </div>
+</div>
+
+<!-- CPU TRADE OFFER MODAL -->
+<div id="cpu-trade-offer-modal" style="display:none;" class="modal-overlay">
+  <div class="modal-box" style="max-width:500px;">
+    <div class="modal-header">
+      <h2>🔄 Incoming Trade Offer</h2>
+    </div>
+    <div id="cpu-trade-offer-body" style="padding:20px;overflow-y:auto;max-height:65vh;"></div>
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;">
+      <button class="btn btn-outline" onclick="declineCPUTradeOffer()">✕ Decline</button>
+      <button class="btn btn-gold" onclick="acceptCPUTradeOffer()">✓ Accept Trade</button>
+    </div>
   </div>
 </div>
 
