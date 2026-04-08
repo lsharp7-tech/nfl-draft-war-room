@@ -2855,8 +2855,8 @@ function renderMockBoard() {
   // Search bar
   const searchBar = `
     <div style="padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface);">
-      <input type="text" placeholder="Search players..." value="${mockBoardSearch.replace(/"/g,'&quot;')}"
-        oninput="mockBoardSearch=this.value;renderMockBoard()"
+      <input type="text" id="mock-board-search-input" placeholder="Search players..." value="${mockBoardSearch.replace(/"/g,'&quot;')}"
+        oninput="mockBoardSearch=this.value;renderMockBoardRows()"
         style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;" />
     </div>`;
 
@@ -2900,7 +2900,39 @@ function renderMockBoard() {
       </div>`;
     }).join('');
 
-  panel.innerHTML = scarcityBar + hint + needsCard + sortBar + filterBar + searchBar + rows;
+  panel.innerHTML = scarcityBar + hint + needsCard + sortBar + filterBar + searchBar + `<div id="mock-board-rows">${rows}</div>`;
+}
+
+function renderMockBoardRows() {
+  const rowsEl = document.getElementById('mock-board-rows');
+  if (!rowsEl) { renderMockBoard(); return; }
+  const draftedIds = new Set(MOCK_PICKS.filter(p => p.playerId).map(p => p.playerId));
+  const pick = MOCK_PICKS.find(p => p.pick === selectedMockPick);
+  const owner = pick ? pickOwner(pick) : null;
+  const needs = owner ? (TEAM_NEEDS[owner] || []) : [];
+  const searchLower = mockBoardSearch.toLowerCase();
+  const rows = sortedMockProspects()
+    .filter(p => !draftedIds.has(p.id))
+    .filter(p => mockBoardFilter === 'ALL' || p.pos === mockBoardFilter)
+    .filter(p => !searchLower || p.name.toLowerCase().includes(searchLower) || p.school.toLowerCase().includes(searchLower) || p.pos.toLowerCase().includes(searchLower))
+    .map(p => {
+      const fillsNeed = needs.includes(p.pos);
+      const needDot = fillsNeed
+        ? `<span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;margin-right:4px;vertical-align:middle;" title="Fills a team need"></span>`
+        : '';
+      return `<div class="mock-avail-row ${fillsNeed ? 'mock-need-match' : ''}" onclick="openMockProfile(${p.id})">
+        <span class="pos-badge pos-${p.pos}" style="font-size:10px;padding:2px 6px;">${p.pos}</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);">${needDot}${p.name}</div>
+          <div style="font-size:11px;color:var(--muted);">${p.school}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="font-family:'DM Mono',monospace;font-size:12px;color:${getGradeColor(computeGrade(p))}">${computeGrade(p)}</div>
+          ${selectedMockPick ? `<button class="btn btn-gold" style="font-size:10px;padding:3px 8px;" onclick="event.stopPropagation();assignMockPick(${p.id})">Draft</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  rowsEl.innerHTML = rows;
 }
 
 function selectMockPick(pickNum) {
