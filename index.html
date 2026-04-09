@@ -4466,6 +4466,7 @@ let draftClockRunning = false;
 let draftClockInterval = null;
 let liveSelectedProspectId = null;
 let liveSelectedReaction = null;
+let livePickTeamOverride = null;
 let livePosFilter = 'ALL';
 
 function saveLiveDraft() {
@@ -4560,9 +4561,23 @@ function renderLiveEntryArea() {
   }).join('');
 
   const canSubmit = selectedProspect || (input?.value||'').trim();
+  const allTeams = [...new Set(MOCK_PICKS.map(p => p.team.replace(/\s*\(via[^)]*\)/i,'').trim()))].sort();
+  const defaultTeam = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+  const activeTeam = livePickTeamOverride || defaultTeam;
+  const isTrade = !!livePickTeamOverride;
 
   el.innerHTML = `<div style="padding:12px 14px;">
-    <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Enter Pick #${pick.pick}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Enter Pick #${pick.pick}</div>
+      <button onclick="liveToggleTradeOverride()" style="background:${isTrade?'#3a2000':'none'};border:1px solid ${isTrade?'var(--gold)':'var(--border)'};border-radius:4px;color:${isTrade?'var(--gold)':'var(--muted)'};font-size:10px;font-weight:700;padding:2px 8px;cursor:pointer;">🔄 Traded</button>
+    </div>
+    ${isTrade ? `<div style="margin-bottom:8px;">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Pick traded to:</div>
+      <select onchange="liveSetTradeTeam(this.value)" style="width:100%;background:var(--surface2);border:1px solid var(--gold);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;">
+        ${allTeams.map(t => `<option value="${t}"${t===activeTeam?' selected':''}>${t}</option>`).join('')}
+      </select>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">Originally: ${defaultTeam}</div>
+    </div>` : `<div style="font-size:12px;color:var(--text);font-weight:600;margin-bottom:8px;">${defaultTeam}</div>`}
     ${selectedProspect ? `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--gold);border-radius:6px;margin-bottom:8px;">
       <span class="pos-badge pos-${selectedProspect.pos}" style="font-size:9px;">${selectedProspect.pos}</span>
       <span style="font-size:13px;font-weight:600;flex:1;">${selectedProspect.name}</span>
@@ -4579,6 +4594,21 @@ function renderLiveEntryArea() {
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">${reactionBtns}</div>
     <button class="btn${canSubmit?' btn-gold':' btn-outline'}" style="width:100%;${canSubmit?'':'opacity:0.5;cursor:not-allowed;'}" onclick="submitLivePick()">✓ Record Pick #${pick.pick}</button>
   </div>`;
+}
+
+function liveToggleTradeOverride() {
+  if (livePickTeamOverride) {
+    livePickTeamOverride = null;
+  } else {
+    const pick = liveMockPick(liveCurrentPick);
+    if (!pick) return;
+    livePickTeamOverride = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+  }
+  renderLiveEntryArea();
+}
+
+function liveSetTradeTeam(team) {
+  livePickTeamOverride = team;
 }
 
 function liveSelectProspect(id) {
@@ -4604,11 +4634,14 @@ function submitLivePick() {
   const playerName = prospect ? prospect.name : freeform;
   if (!playerName) { showToast('Enter a player name'); return; }
 
+  const originalTeam = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+  const effectiveTeam = livePickTeamOverride || originalTeam;
   LIVE_DRAFT_PICKS[liveCurrentPick] = {
     playerName,
     playerId: prospect ? prospect.id : null,
     reaction: liveSelectedReaction,
-    team: pick.team,
+    team: effectiveTeam,
+    tradedFrom: livePickTeamOverride ? originalTeam : null,
   };
 
   liveCurrentPick++;
@@ -4616,6 +4649,7 @@ function submitLivePick() {
 
   liveSelectedProspectId = null;
   liveSelectedReaction = null;
+  livePickTeamOverride = null;
 
   // Auto-reset clock for next pick
   const nextPick = liveMockPick(liveCurrentPick);
@@ -4638,6 +4672,7 @@ function undoLivePick() {
   liveCurrentPick = last;
   liveSelectedProspectId = null;
   liveSelectedReaction = null;
+  livePickTeamOverride = null;
   saveLiveDraft();
   renderLiveDraft();
 }
@@ -4648,6 +4683,7 @@ function resetLiveDraft() {
   liveCurrentPick = 1;
   liveSelectedProspectId = null;
   liveSelectedReaction = null;
+  livePickTeamOverride = null;
   saveLiveDraft();
   renderLiveDraft();
 }
@@ -4783,7 +4819,8 @@ function renderLiveFeed() {
     const boardRank = prospect ? PROSPECTS.indexOf(prospect) + 1 : null;
     const diff = boardRank ? pickNum - boardRank : null; // positive = reach, negative = value
 
-    const teamRaw = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+    const teamRaw = d.team || pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
+    const tradeBadge = d.tradedFrom ? `<span style="font-size:9px;background:#3a2000;color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:1px 5px;font-weight:700;margin-left:4px;">TRADED</span>` : '';
     let roundHdr = '';
     if (pick.round !== lastRound) {
       lastRound = pick.round;
@@ -4804,7 +4841,7 @@ function renderLiveFeed() {
           <div style="font-size:9px;color:var(--muted);">Rd ${pick.round}</div>
         </div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:10px;color:var(--muted);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${teamRaw}</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:2px;display:flex;align-items:center;gap:0;">${teamRaw}${tradeBadge}${d.tradedFrom?`<span style="font-size:9px;color:var(--muted);margin-left:4px;">(from ${d.tradedFrom})</span>`:''}</div>
           <div style="display:flex;align-items:center;gap:5px;">${posBadge}<span style="font-size:13px;font-weight:600;">${d.playerName}</span></div>
           <div style="margin-top:2px;">${boardRank?`<span style="font-size:10px;color:var(--muted);">Board #${boardRank} · </span>`:''} ${valueStr}</div>
         </div>
