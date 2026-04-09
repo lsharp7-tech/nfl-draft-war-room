@@ -4740,6 +4740,20 @@ function matchProspectByName(name) {
   return m || null;
 }
 
+const NFL_ABBREV_MAP = {
+  ARI:"Arizona Cardinals", ATL:"Atlanta Falcons", BAL:"Baltimore Ravens",
+  BUF:"Buffalo Bills", CAR:"Carolina Panthers", CHI:"Chicago Bears",
+  CIN:"Cincinnati Bengals", CLE:"Cleveland Browns", DAL:"Dallas Cowboys",
+  DEN:"Denver Broncos", DET:"Detroit Lions", GB:"Green Bay Packers",
+  HOU:"Houston Texans", IND:"Indianapolis Colts", JAX:"Jacksonville Jaguars",
+  KC:"Kansas City Chiefs", LAC:"Los Angeles Chargers", LAR:"Los Angeles Rams",
+  LV:"Las Vegas Raiders", MIA:"Miami Dolphins", MIN:"Minnesota Vikings",
+  NE:"New England Patriots", NO:"New Orleans Saints", NYG:"New York Giants",
+  NYJ:"New York Jets", PHI:"Philadelphia Eagles", PIT:"Pittsburgh Steelers",
+  SEA:"Seattle Seahawks", SF:"San Francisco 49ers", TB:"Tampa Bay Buccaneers",
+  TEN:"Tennessee Titans", WSH:"Washington Commanders",
+};
+
 async function fetchLivePicksESPN() {
   const YEAR = 2026;
   let newCount = 0;
@@ -4779,15 +4793,20 @@ async function fetchLivePicksESPN() {
         }
         if (!playerName) continue;
 
-        const team = p.team?.abbreviation || '';
+        const abbrev = p.team?.abbreviation || '';
+        const espnTeamFull = NFL_ABBREV_MAP[abbrev] || abbrev;
+        const mockPick = liveMockPick(pickNum);
+        const mockTeam = mockPick ? mockPick.team.replace(/\s*\(via[^)]*\)/i,'').trim() : '';
+        const tradedFrom = espnTeamFull && mockTeam && espnTeamFull !== mockTeam ? mockTeam : null;
         const matched = matchProspectByName(playerName);
-        LIVE_DRAFT_PICKS[pickNum] = { playerName, playerId: matched?.id || null, reaction: null, team, autoFetched: true };
+        LIVE_DRAFT_PICKS[pickNum] = { playerName, playerId: matched?.id || null, reaction: null, team: espnTeamFull || abbrev, tradedFrom, autoFetched: true };
 
         if (pickNum >= liveCurrentPick) {
           liveCurrentPick = pickNum + 1;
           while (liveCurrentPick <= MOCK_PICKS.length && LIVE_DRAFT_PICKS[liveCurrentPick]) liveCurrentPick++;
         }
-        showToast(`🏈 #${pickNum}: ${playerName} → ${team || '?'}`);
+        const tradeNote = tradedFrom ? ` (traded from ${tradedFrom})` : '';
+        showToast(`🏈 #${pickNum}: ${playerName} → ${espnTeamFull || abbrev || '?'}${tradeNote}`);
         newCount++;
       }
     }
