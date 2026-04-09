@@ -360,6 +360,11 @@
   .card-name { font-size:15px; font-weight:600; color:var(--text); text-align:center; line-height:1.3; }
   .card-school { font-size:12px; color:var(--muted); text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%; }
   .card-chips { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; margin-top:4px; }
+  .card-tier-header { grid-column:1/-1; padding:8px 4px 6px; font-family:'Bebas Neue',sans-serif; font-size:13px; letter-spacing:2px; border-top:2px solid; margin-top:8px; }
+  .live-run-banner { padding:7px 16px; font-size:12px; font-weight:700; background:#1a0d00; border-bottom:1px solid var(--gold); color:var(--gold); display:flex; align-items:center; justify-content:space-between; }
+  .live-recap-block { margin:0; padding:10px 14px 12px; background:#0d0d1a; border-bottom:1px solid var(--border); }
+  .live-recap-block .recap-header { font-size:10px; font-weight:700; color:#c084fc; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+  .live-recap-block .recap-body { font-size:12px; color:var(--text); line-height:1.65; }
   .view-toggle-btn { padding:5px 12px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; }
   .view-toggle-btn.active { background:var(--gold); color:#000; border-color:var(--gold); }
 
@@ -688,6 +693,8 @@
 
 <!-- LIVE DRAFT VIEW -->
 <div id="live-draft-view" style="display:none;width:100%;">
+  <!-- position run banner -->
+  <div id="live-run-banner" style="display:none;" class="live-run-banner"><span id="live-run-text"></span><button onclick="document.getElementById('live-run-banner').style.display='none'" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:14px;padding:0 4px;">✕</button></div>
   <!-- top bar -->
   <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;">
     <div style="display:flex;align-items:center;gap:12px;">
@@ -1093,7 +1100,28 @@ function renderBoard() {
   if (boardView === 'card') {
     const grid = document.createElement('div');
     grid.className = 'board-card-grid';
+    const topTier = TIERS.find(t => t.afterId === '__top__');
+    if (topTier) {
+      const th = document.createElement('div');
+      th.className = 'card-tier-header';
+      th.style.color = topTier.color || 'var(--gold)';
+      th.style.borderTopColor = topTier.color || 'var(--gold)';
+      th.textContent = topTier.name;
+      grid.appendChild(th);
+    }
+    let prevCardProspect = null;
     filtered.forEach(p => {
+      if (prevCardProspect) {
+        const tier = TIERS.find(t => t.afterId === prevCardProspect.id);
+        if (tier) {
+          const th = document.createElement('div');
+          th.className = 'card-tier-header';
+          th.style.color = tier.color || 'var(--gold)';
+          th.style.borderTopColor = tier.color || 'var(--gold)';
+          th.textContent = tier.name;
+          grid.appendChild(th);
+        }
+      }
       const origIdx = PROSPECTS.indexOf(p);
       const g = computeGrade(p);
       const card = document.createElement('div');
@@ -1118,6 +1146,7 @@ function renderBoard() {
           ${p.ras>0 ? `<span class="chip" style="background:#1a1000;color:var(--gold);border:1px solid #3a2800;">RAS ${p.ras.toFixed(1)}</span>` : ''}
         </div>`;
       grid.appendChild(card);
+      prevCardProspect = p;
     });
     list.appendChild(grid);
     return;
@@ -1491,6 +1520,7 @@ function renderProspectProfile(p) {
       <button class="btn btn-outline" style="flex:1;min-width:70px;" onclick="openEditModal(${selectedId})">✏️ Edit</button>
       <button class="btn btn-red" style="flex:1;min-width:70px;" onclick="deleteProspect(${selectedId})">🗑 Delete</button>
       <button class="btn btn-outline" style="flex:1;min-width:80px;" onclick="generateFullReport(${selectedId})">📋 Full Report</button>
+      <button class="btn btn-outline" style="flex:1;min-width:80px;" onclick="prospectNews(${selectedId})">📰 News</button>
       <button class="btn btn-gold" style="flex:2;min-width:100px;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🐶 Ask Otis</button>
     </div>
   `;
@@ -1522,6 +1552,15 @@ function renderAIPanel(p) {
     <div id="ai-chat-history"></div>
   `;
   renderAIHistory();
+}
+
+function prospectNews(id) {
+  const p = PROSPECTS.find(x => x.id === id);
+  if (!p) return;
+  if (!getApiKey()) { showToast('Set API key first'); return; }
+  switchDetailTab('ai');
+  renderAIPanel(p);
+  setTimeout(() => askAI(`What's the latest pre-draft buzz, reported NFL team interest, and any notable news surrounding ${p.name} (${p.pos}, ${p.school}) heading into the 2026 NFL Draft? Include any known visits, workouts, or draft position projections from scouts and analysts.`, id), 100);
 }
 
 function renderAIHistory() {
@@ -2774,6 +2813,7 @@ let selectedMockPick = null;
 let mockBoardSort = 'my';
 let mockBoardFilter = 'ALL';
 let myMockTeam = null;
+let mockPicksView = 'list';
 let mockProfileProspect = null;
 let mockProfileTab = 'profile';
 let mockOtisHistory = [];
@@ -2831,10 +2871,40 @@ function renderMockDraft() {
   if (counter) counter.textContent = `${made} / ${MOCK_PICKS.length} picks`;
 }
 
+function setMockPicksView(v) { mockPicksView = v; renderMockPicks(); }
+
 function renderMockPicks() {
   const panel = document.getElementById('mock-picks-panel');
   if (!panel) return;
-  let html = '';
+
+  const viewToggle = `<div style="padding:7px 10px;border-bottom:1px solid var(--border);background:var(--bg);display:flex;gap:5px;position:sticky;top:0;z-index:3;">
+    <button onclick="setMockPicksView('list')" style="flex:1;padding:3px;border:1px solid ${mockPicksView==='list'?'var(--gold)':'var(--border)'};background:${mockPicksView==='list'?'var(--gold)':'transparent'};color:${mockPicksView==='list'?'#000':'var(--muted)'};border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">≡ Picks</button>
+    <button onclick="setMockPicksView('team')" style="flex:1;padding:3px;border:1px solid ${mockPicksView==='team'?'var(--gold)':'var(--border)'};background:${mockPicksView==='team'?'var(--gold)':'transparent'};color:${mockPicksView==='team'?'#000':'var(--muted)'};border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;">⊞ By Team</button>
+  </div>`;
+
+  if (mockPicksView === 'team') {
+    const teams = [...new Set(MOCK_PICKS.map(p => pickOwner(p)))].sort();
+    let html = viewToggle;
+    teams.forEach(team => {
+      const teamPicks = MOCK_PICKS.filter(p => pickOwner(p) === team).sort((a,b)=>a.pick-b.pick);
+      const isMine = team === myMockTeam;
+      html += `<div style="border-bottom:1px solid var(--border);">
+        <div style="padding:5px 12px;background:${isMine?'#1a1400':'var(--bg)'};font-size:11px;font-weight:700;color:${isMine?'var(--gold)':'var(--muted)'};text-transform:uppercase;letter-spacing:0.5px;">${team}${isMine?' ★':''}</div>`;
+      teamPicks.forEach(pick => {
+        const p = pick.playerId ? PROSPECTS.find(x=>x.id===pick.playerId) : null;
+        const isSel = selectedMockPick === pick.pick;
+        html += `<div onclick="selectMockPick(${pick.pick})" style="padding:4px 12px 4px 20px;cursor:pointer;display:flex;align-items:center;gap:7px;background:${isSel?'#1a1400':'transparent'};border-left:${isSel?'2px solid var(--gold)':'2px solid transparent'};">
+          <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-width:36px;">R${pick.round}·#${pick.pick}</span>
+          ${p ? `<span class="pos-badge pos-${p.pos}" style="font-size:9px;padding:1px 4px;">${p.pos}</span><span style="font-size:12px;font-weight:600;color:var(--text);">${p.name}</span>` : `<span style="font-size:11px;color:var(--border);">— empty —</span>`}
+        </div>`;
+      });
+      html += '</div>';
+    });
+    panel.innerHTML = html;
+    return;
+  }
+
+  let html = viewToggle;
   let lastRound = 0;
   // Build next-pick-for-team map: given current pick, how many picks away is each team's next turn?
   const firstEmptyPick = MOCK_PICKS.find(p => !p.playerId)?.pick || null;
@@ -4459,6 +4529,7 @@ const LIVE_REACTIONS = [
 ];
 
 let LIVE_DRAFT_PICKS = {}; // { pickNum: {playerName, playerId, reaction, team} }
+let LIVE_ROUND_RECAPS = {}; // { roundNum: recapText }
 let liveCurrentPick = 1;
 let liveRightTab = 'available';
 let draftClockTime = 0;
@@ -4470,7 +4541,7 @@ let livePickTeamOverride = null;
 let livePosFilter = 'ALL';
 
 function saveLiveDraft() {
-  try { localStorage.setItem('nfl_live_draft', JSON.stringify({ picks: LIVE_DRAFT_PICKS, currentPick: liveCurrentPick })); } catch(e) {}
+  try { localStorage.setItem('nfl_live_draft', JSON.stringify({ picks: LIVE_DRAFT_PICKS, currentPick: liveCurrentPick, recaps: LIVE_ROUND_RECAPS })); } catch(e) {}
 }
 function loadLiveDraft() {
   try {
@@ -4479,6 +4550,7 @@ function loadLiveDraft() {
     const d = JSON.parse(s);
     LIVE_DRAFT_PICKS = d.picks || {};
     liveCurrentPick = d.currentPick || 1;
+    LIVE_ROUND_RECAPS = d.recaps || {};
   } catch(e) {}
 }
 
@@ -4634,6 +4706,7 @@ function submitLivePick() {
   const playerName = prospect ? prospect.name : freeform;
   if (!playerName) { showToast('Enter a player name'); return; }
 
+  const submittedPickNum = liveCurrentPick;
   const originalTeam = pick.team.replace(/\s*\(via[^)]*\)/i,'').trim();
   const effectiveTeam = livePickTeamOverride || originalTeam;
   LIVE_DRAFT_PICKS[liveCurrentPick] = {
@@ -4657,6 +4730,8 @@ function submitLivePick() {
 
   saveLiveDraft();
   renderLiveDraft();
+  checkPositionRun();
+  checkRoundComplete(submittedPickNum);
 
   setTimeout(() => {
     const feed = document.getElementById('live-feed');
@@ -4680,6 +4755,7 @@ function undoLivePick() {
 function resetLiveDraft() {
   if (!confirm('Clear all recorded live draft picks?')) return;
   LIVE_DRAFT_PICKS = {};
+  LIVE_ROUND_RECAPS = {};
   liveCurrentPick = 1;
   liveSelectedProspectId = null;
   liveSelectedReaction = null;
@@ -4811,13 +4887,84 @@ async function fetchLivePicksESPN() {
       }
     }
 
-    if (newCount > 0) { saveLiveDraft(); renderLiveDraft(); }
+    if (newCount > 0) {
+      saveLiveDraft();
+      renderLiveDraft();
+      checkPositionRun();
+      // Check for round completions on all newly recorded picks
+      Object.keys(LIVE_DRAFT_PICKS).map(Number).sort((a,b)=>a-b).forEach(num => {
+        if (!LIVE_ROUND_RECAPS[liveMockPick(num)?.round]) checkRoundComplete(num);
+      });
+    }
     liveLastUpdate = Date.now();
     updateLiveAutoStatus(newCount > 0 ? `${newCount} new pick${newCount > 1 ? 's' : ''}` : 'up to date');
   } catch(e) {
     console.error('ESPN poll error:', e);
     updateLiveAutoStatus('error');
   }
+}
+
+function checkPositionRun() {
+  const pickNums = Object.keys(LIVE_DRAFT_PICKS).map(Number).sort((a,b)=>a-b);
+  if (pickNums.length < 3) return;
+  const recent = pickNums.slice(-8);
+  const counts = {};
+  recent.forEach(num => {
+    const d = LIVE_DRAFT_PICKS[num];
+    const pos = d.playerId ? PROSPECTS.find(p=>p.id===d.playerId)?.pos : null;
+    if (pos) counts[pos] = (counts[pos]||0) + 1;
+  });
+  const runs = Object.entries(counts).filter(([,c])=>c>=3);
+  if (!runs.length) return;
+  const banner = document.getElementById('live-run-banner');
+  const text = document.getElementById('live-run-text');
+  if (!banner || !text) return;
+  const msg = runs.map(([pos,c])=>`⚡ ${pos} run — ${c} taken in last ${recent.length} picks`).join('  ·  ');
+  text.textContent = msg;
+  banner.style.display = 'flex';
+}
+
+function checkRoundComplete(pickNum) {
+  const pick = liveMockPick(pickNum);
+  if (!pick) return;
+  const roundPicks = MOCK_PICKS.filter(p => p.round === pick.round);
+  if (!roundPicks.length) return;
+  const lastInRound = roundPicks[roundPicks.length - 1].pick;
+  if (pickNum !== lastInRound) return;
+  if (LIVE_ROUND_RECAPS[pick.round]) return; // already recapped
+  if (!getApiKey()) return;
+  triggerRoundRecap(pick.round);
+}
+
+async function triggerRoundRecap(round) {
+  const roundPicks = MOCK_PICKS.filter(p => p.round === round).sort((a,b)=>a.pick-b.pick);
+  const lines = roundPicks.map(p => {
+    const d = LIVE_DRAFT_PICKS[p.pick];
+    if (!d) return null;
+    const prospect = d.playerId ? PROSPECTS.find(x=>x.id===d.playerId) : null;
+    const boardRank = prospect ? PROSPECTS.indexOf(prospect)+1 : null;
+    const diff = boardRank ? p.pick - boardRank : null;
+    const tag = diff===null?'':(diff<-5?' [steal]':diff>10?' [big reach]':diff>3?' [slight reach]':' [fair value]');
+    const tradeNote = d.tradedFrom ? ` [traded from ${d.tradedFrom}]` : '';
+    return `#${p.pick} ${d.team}: ${d.playerName}${prospect?` (${prospect.pos})`:''}${tag}${tradeNote}`;
+  }).filter(Boolean);
+  if (!lines.length) return;
+
+  LIVE_ROUND_RECAPS[round] = 'loading';
+  renderLiveFeed();
+
+  const prompt = `Here are all the picks from Round ${round} of the 2026 NFL Draft:\n\n${lines.join('\n')}\n\nGive a quick round recap: best value pick, biggest reach, most surprising pick or trade, and any notable trends. 3-4 sentences, direct and punchy.`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json','x-api-key':getApiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,messages:[{role:'user',content:prompt}]})
+    });
+    const data = await res.json();
+    LIVE_ROUND_RECAPS[round] = data.content?.[0]?.text || 'No recap available.';
+  } catch(e) {
+    LIVE_ROUND_RECAPS[round] = 'Recap unavailable.';
+  }
+  renderLiveFeed();
 }
 
 function renderLiveFeed() {
@@ -4828,6 +4975,10 @@ function renderLiveFeed() {
     el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;flex-direction:column;gap:10px;"><div style="font-size:36px;">📺</div><div>Picks will appear here as you record them</div></div>`;
     return;
   }
+  // Precompute last recorded pick per round for recap injection
+  const lastPickPerRound = {};
+  made.forEach(num => { const pk = liveMockPick(num); if (pk) lastPickPerRound[pk.round] = num; });
+
   let lastRound = 0;
   el.innerHTML = made.map(pickNum => {
     const d = LIVE_DRAFT_PICKS[pickNum];
@@ -4845,6 +4996,12 @@ function renderLiveFeed() {
       lastRound = pick.round;
       roundHdr = `<div class="live-feed-round-hdr">ROUND ${pick.round}</div>`;
     }
+    // Round recap block after last recorded pick of a round
+    const recap = LIVE_ROUND_RECAPS[pick.round];
+    const isLastOfRound = lastPickPerRound[pick.round] === pickNum;
+    const recapBlock = isLastOfRound && recap
+      ? `<div class="live-recap-block"><div class="recap-header">🐶 Otis — Round ${pick.round} Recap</div><div class="recap-body">${recap === 'loading' ? '<em style="color:var(--muted)">Generating recap…</em>' : recap}</div></div>`
+      : '';
     const valueStr = diff !== null
       ? diff < -5  ? `<span style="color:var(--green);font-size:10px;font-weight:700;">▲${Math.abs(diff)} value</span>`
       : diff > 10 ? `<span style="color:var(--red);font-size:10px;font-weight:700;">▼${diff} reach</span>`
@@ -4870,7 +5027,7 @@ function renderLiveFeed() {
         </div>
       </div>
       <div id="live-otis-${pickNum}" style="padding:0 14px 0;"></div>
-    </div>`;
+    </div>${recapBlock}`;
   }).join('');
 }
 
@@ -5120,11 +5277,30 @@ function renderMockVsReal() {
   }).join('');
 
   const pct = total ? Math.round(correct/total*100) : 0;
+  const grade = pct>=80?'A':pct>=65?'B':pct>=50?'C':pct>=35?'D':'F';
+  const gradeColor = pct>=65?'var(--green)':pct>=50?'var(--gold)':pct>=35?'var(--accent)':'var(--red)';
+  // Per-round accuracy
+  const rounds = [...new Set(MOCK_PICKS.map(p=>p.round))].sort((a,b)=>a-b);
+  const roundStats = rounds.map(r => {
+    let rc=0, rt=0;
+    MOCK_PICKS.filter(p=>p.round===r).forEach(mp=>{
+      const live=LIVE_DRAFT_PICKS[mp.pick];
+      if(!live||!mp.playerId) return;
+      rt++;
+      if(live.playerId===mp.playerId) rc++;
+    });
+    return rt ? `<span style="font-size:11px;color:var(--muted);">R${r}: <strong style="color:var(--text)">${rc}/${rt}</strong></span>` : null;
+  }).filter(Boolean).join('<span style="color:var(--border);margin:0 4px;">|</span>');
   body.innerHTML = `
-    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:20px;background:var(--surface);flex-wrap:wrap;">
-      <span style="font-size:13px;color:var(--muted);">Picks compared: <strong style="color:var(--text)">${total}</strong></span>
-      <span style="font-size:13px;color:var(--muted);">Correct: <strong style="color:var(--green)">${correct}</strong></span>
-      <span style="font-size:13px;color:var(--muted);">Accuracy: <strong style="color:${pct>=50?'var(--green)':'var(--muted)'}">${pct}%</strong></span>
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface);">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:48px;line-height:1;color:${gradeColor};">${grade}</div>
+        <div>
+          <div style="font-size:20px;font-weight:700;color:var(--text);">${pct}% accuracy</div>
+          <div style="font-size:12px;color:var(--muted);">${correct} of ${total} picks matched</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${roundStats}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;">
       <thead style="background:var(--surface);position:sticky;top:0;z-index:2;">
@@ -5805,6 +5981,23 @@ function printBoard() {
 </body></html>`);
   win.document.close();
 }
+
+// ── KEYBOARD SHORTCUTS (Draft Night) ─────────────────────────────────
+document.addEventListener('keydown', e => {
+  const liveView = document.getElementById('live-draft-view');
+  if (!liveView || liveView.style.display === 'none') return;
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key === '/' || e.key === 'f') {
+    e.preventDefault();
+    const inp = document.getElementById('live-search-input');
+    if (inp) inp.focus();
+  } else if (e.key === 'Enter') {
+    submitLivePick();
+  } else if (e.key === 'Escape') {
+    liveSelectProspect(null);
+  }
+});
 
 // ── INIT ─────────────────────────────────────────────────────────────
 (async () => {
