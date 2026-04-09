@@ -1520,7 +1520,6 @@ function renderProspectProfile(p) {
       <button class="btn btn-outline" style="flex:1;min-width:70px;" onclick="openEditModal(${selectedId})">✏️ Edit</button>
       <button class="btn btn-red" style="flex:1;min-width:70px;" onclick="deleteProspect(${selectedId})">🗑 Delete</button>
       <button class="btn btn-outline" style="flex:1;min-width:80px;" onclick="generateFullReport(${selectedId})">📋 Full Report</button>
-      <button class="btn btn-outline" style="flex:1;min-width:80px;" onclick="prospectNews(${selectedId})">📋 Scout</button>
       <button class="btn btn-gold" style="flex:2;min-width:100px;" onclick="switchDetailTab('ai');renderAIPanel(PROSPECTS.find(x=>x.id==${selectedId}))">🐶 Ask Otis</button>
     </div>
   `;
