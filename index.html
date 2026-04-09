@@ -5417,7 +5417,7 @@ function updateDraftCountdown() {
   const mins = Math.floor((diff % 3600000) / 60000);
   const secs = Math.floor((diff % 60000) / 1000);
   if (days > 0) {
-    el.innerHTML = `<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">DRAFT DAY</div><div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--gold);">${days}d ${hrs}h ${mins}m</div>`;
+    el.innerHTML = `<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">DRAFT DAY</div><div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--gold);">${days}d ${hrs}h ${mins}m ${secs}s</div>`;
   } else {
     el.innerHTML = `<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">DRAFT STARTS IN</div><div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--red);">${hrs}h ${mins}m ${secs}s</div>`;
   }
