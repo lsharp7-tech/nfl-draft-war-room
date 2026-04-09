@@ -348,6 +348,61 @@
   .scarcity-pill { display:flex; align-items:center; gap:3px; padding:2px 6px; border-radius:4px; border:1px solid var(--border); font-size:10px; font-weight:700; cursor:default; }
   .scarcity-pill.scarce { border-color:var(--red); color:var(--red); }
   .scarcity-pill.plentiful { color:var(--muted); }
+
+  /* PLAYER CARD VIEW */
+  .board-card-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; padding:4px 0; }
+  .prospect-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 12px; cursor:pointer; transition:all 0.15s; display:flex; flex-direction:column; gap:5px; position:relative; }
+  .prospect-card:hover { border-color:var(--gold); background:var(--surface2); transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,0.4); }
+  .prospect-card.selected { border-color:var(--blue); background:#0d1625; }
+  .card-rank { position:absolute; top:8px; right:10px; font-family:'Bebas Neue',sans-serif; font-size:17px; color:var(--muted); line-height:1; }
+  .card-grade { font-family:'DM Mono',monospace; font-size:30px; font-weight:700; text-align:center; line-height:1; }
+  .card-name { font-size:12px; font-weight:600; color:var(--text); text-align:center; line-height:1.3; }
+  .card-school { font-size:10px; color:var(--muted); text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .card-chips { display:flex; flex-wrap:wrap; gap:3px; justify-content:center; margin-top:4px; }
+  .view-toggle-btn { padding:5px 12px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+  .view-toggle-btn.active { background:var(--gold); color:#000; border-color:var(--gold); }
+
+  /* MOBILE LAYOUT */
+  @media (max-width: 768px) {
+    header { padding:10px 14px; flex-wrap:wrap; gap:8px; position:relative; }
+    .logo h1 { font-size:20px; letter-spacing:2px; }
+    .logo-icon { font-size:22px; }
+    .logo span { font-size:9px; }
+    .header-actions { flex-wrap:wrap; gap:6px; width:100%; }
+    .header-actions .btn { font-size:11px; padding:6px 12px; }
+    #draft-countdown { width:100%; text-align:center; order:-1; }
+
+    .tabs { padding:0 8px; overflow-x:auto; white-space:nowrap; scrollbar-width:none; }
+    .tabs::-webkit-scrollbar { display:none; }
+    .tab { padding:10px 14px; font-size:11px; flex-shrink:0; }
+
+    .main { flex-direction:column; height:auto; min-height:0; }
+    .board-panel { border-right:none; border-bottom:1px solid var(--border); padding:12px; max-height:60vh; overflow-y:auto; }
+    .detail-panel { width:100% !important; border-left:none; border-top:1px solid var(--border); height:auto; min-height:300px; flex-shrink:0; }
+
+    .board-header { flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+    .board-header h2 { font-size:18px; }
+    .board-header > div { flex-wrap:wrap; gap:4px; }
+
+    .mock-layout { flex-direction:column !important; height:auto !important; }
+    .mock-picks-panel { width:100% !important; max-height:280px; border-right:none !important; border-bottom:1px solid var(--border); }
+    .mock-board-panel { height:50vh; overflow-y:auto; }
+
+    #mock-tab-header { flex-wrap:wrap; gap:6px; padding:10px 12px; }
+    #mock-tab-header .btn { font-size:10px; padding:5px 8px; }
+    #mock-tab-header h2 { font-size:18px; }
+
+    .live-layout { flex-direction:column; height:auto; }
+    .live-col { max-height:300px; }
+
+    .modal-box { margin:10px; max-width:calc(100vw - 20px) !important; }
+    .board-card-grid { grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:8px; }
+
+    .prospect-row { padding:8px 10px; gap:7px; }
+    .prospect-name { font-size:13px; }
+    .ranking-chips { display:none; }
+    .drag-handle { display:none; }
+  }
 </style>
 </head>
 <body>
@@ -360,6 +415,7 @@
       <span>2026 Draft Class · Big Board</span>
     </div>
   </div>
+  <div id="draft-countdown" style="text-align:center;"></div>
   <div class="header-actions">
     <span id="prospect-count" style="font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
     <button class="btn btn-outline" id="lock-board-btn" onclick="toggleBoardLock()">🔒 Lock Board</button>
@@ -398,7 +454,9 @@
   <div class="board-panel panel" id="board-panel">
     <div class="board-header">
       <h2>Big Board Rankings</h2>
-      <div style="display:flex;gap:6px;align-items:center;">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <button id="view-toggle-btn" class="view-toggle-btn" onclick="toggleBoardView()" title="Toggle card/list view">☰ List</button>
+        <div style="width:1px;height:16px;background:var(--border);"></div>
         <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Sort:</span>
         <button class="filter-btn active" id="sort-my" onclick="sortBoard('my',this)">My Board</button>
         <button class="filter-btn" id="sort-grade" onclick="sortBoard('grade',this)">Grade</button>
@@ -519,6 +577,7 @@
       <button class="btn btn-outline" style="font-size:12px;" onclick="openReachesModal()">🎯 Reaches & Steals</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openTradeLogModal()">📋 Trade Log</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openTeamDraftModal()">👥 Team View</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="openMockCompareModal()">⚖️ Compare</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
     </div>
   </div>
@@ -1028,12 +1087,47 @@ function renderBoard() {
 
   const list = document.getElementById('prospect-list');
   list.innerHTML = '';
+
+  // ── CARD VIEW ──
+  if (boardView === 'card') {
+    const grid = document.createElement('div');
+    grid.className = 'board-card-grid';
+    filtered.forEach(p => {
+      const origIdx = PROSPECTS.indexOf(p);
+      const g = computeGrade(p);
+      const card = document.createElement('div');
+      card.className = 'prospect-card' + (selectedId === p.id ? ' selected' : '');
+      card.onclick = () => selectProspect(p.id);
+      const conRank = consensusRank(p);
+      const conDisplay = conRank < 9999 ? Math.round(conRank) : null;
+      card.innerHTML = `
+        <div class="card-rank">#${origIdx + 1}</div>
+        <div style="display:flex;justify-content:center;margin-bottom:2px;"><span class="pos-badge pos-${p.pos}" style="font-size:11px;padding:3px 9px;">${p.pos}</span></div>
+        <div class="card-grade" style="color:${getGradeColor(g)}">${g}</div>
+        <div class="card-name">${p.name}</div>
+        <div class="card-school">${p.school}</div>
+        <div class="card-chips">
+          ${p.espn>0&&p.espn<999?`<span class="chip chip-espn">B/R ${p.espn}</span>`:''}
+          ${p.pff>0&&p.pff<999?`<span class="chip chip-pff">PFF ${p.pff}</span>`:''}
+          ${conDisplay?`<span class="chip chip-con">CON ${conDisplay}</span>`:''}
+          ${p.ras>0?`<span class="chip" style="background:#1a1000;color:var(--gold);border:1px solid var(--gold);">RAS ${p.ras.toFixed(1)}</span>`:''}
+        </div>`;
+      grid.appendChild(card);
+    });
+    list.appendChild(grid);
+    return;
+  }
+
+  // ── LIST VIEW ──
   // Render top-of-board tier if present
   const topTier = TIERS.find(t => t.afterId === '__top__');
   if (topTier) {
     const tierEl = document.createElement('div');
     tierEl.className = 'tier-header';
-    tierEl.innerHTML = `<span class="tier-label">${topTier.name}</span>
+    const tc = topTier.color || 'var(--gold)';
+    tierEl.style.borderTopColor = tc;
+    tierEl.innerHTML = `<span class="tier-label" style="color:${tc};">${topTier.name}</span>
+      <div style="display:flex;gap:3px;align-items:center;">${['var(--gold)','var(--green)','var(--blue)','var(--red)','#c084fc'].map(c=>`<span onclick="event.stopPropagation();setTierColor('__top__','${c}')" style="width:10px;height:10px;border-radius:50%;background:${c};cursor:pointer;border:2px solid ${c===tc?'#fff':'transparent'};flex-shrink:0;"></span>`).join('')}</div>
       <button class="tier-action-btn" onclick="renameTier('__top__')" title="Rename">✎</button>
       <button class="tier-action-btn" onclick="deleteTier('__top__')" title="Delete">✕</button>`;
     list.appendChild(tierEl);
@@ -1049,7 +1143,10 @@ function renderBoard() {
       if (tier) {
         const tierEl = document.createElement('div');
         tierEl.className = 'tier-header';
-        tierEl.innerHTML = `<span class="tier-label">${tier.name}</span>
+        const tc2 = tier.color || 'var(--gold)';
+        tierEl.style.borderTopColor = tc2;
+        tierEl.innerHTML = `<span class="tier-label" style="color:${tc2};">${tier.name}</span>
+          <div style="display:flex;gap:3px;align-items:center;">${['var(--gold)','var(--green)','var(--blue)','var(--red)','#c084fc'].map(c=>`<span onclick="event.stopPropagation();setTierColor('${tier.afterId}','${c}')" style="width:10px;height:10px;border-radius:50%;background:${c};cursor:pointer;border:2px solid ${c===tc2?'#fff':'transparent'};flex-shrink:0;"></span>`).join('')}</div>
           <button class="tier-action-btn" onclick="renameTier('${tier.afterId}')" title="Rename">✎</button>
           <button class="tier-action-btn" onclick="deleteTier('${tier.afterId}')" title="Delete">✕</button>`;
         list.appendChild(tierEl);
@@ -4181,6 +4278,14 @@ function renameTier(afterId) {
   renderBoard();
 }
 
+function setTierColor(afterId, color) {
+  const tier = TIERS.find(t => t.afterId == afterId);
+  if (!tier) return;
+  tier.color = color;
+  saveTiers();
+  renderBoard();
+}
+
 function clearAllTiers() {
   if (!TIERS.length) { showToast('No tiers to clear'); return; }
   if (!confirm('Clear all tier breaks?')) return;
@@ -5296,6 +5401,114 @@ function renderTeamDraftView() {
   body.innerHTML = html;
 }
 
+// ── DRAFT DAY COUNTDOWN ───────────────────────────────────────────────
+function updateDraftCountdown() {
+  const el = document.getElementById('draft-countdown');
+  if (!el) return;
+  const draftDate = new Date('2026-04-23T20:00:00-04:00');
+  const now = new Date();
+  const diff = draftDate - now;
+  if (diff <= 0) {
+    el.innerHTML = `<span style="font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:2px;color:var(--gold);">🏈 DRAFT IS LIVE!</span>`;
+    return;
+  }
+  const days = Math.floor(diff / 86400000);
+  const hrs = Math.floor((diff % 86400000) / 3600000);
+  const mins = Math.floor((diff % 3600000) / 60000);
+  const secs = Math.floor((diff % 60000) / 1000);
+  if (days > 0) {
+    el.innerHTML = `<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">DRAFT DAY</div><div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--gold);">${days}d ${hrs}h ${mins}m</div>`;
+  } else {
+    el.innerHTML = `<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:1px;">DRAFT STARTS IN</div><div style="font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--red);">${hrs}h ${mins}m ${secs}s</div>`;
+  }
+}
+
+// ── PLAYER CARD VIEW ──────────────────────────────────────────────────
+let boardView = 'list';
+
+function toggleBoardView() {
+  boardView = boardView === 'list' ? 'card' : 'list';
+  const btn = document.getElementById('view-toggle-btn');
+  if (btn) { btn.textContent = boardView === 'card' ? '⊞ Cards' : '☰ List'; btn.classList.toggle('active', boardView === 'card'); }
+  renderBoard();
+}
+
+// ── MOCK DRAFT COMPARISON ─────────────────────────────────────────────
+function openMockCompareModal() {
+  const drafts = getSavedDrafts();
+  const names = Object.keys(drafts);
+  if (names.length < 1) { showToast('Save at least one draft first — use 💾 Save'); return; }
+  const opts = names.sort((a,b) => new Date(drafts[b].savedAt)-new Date(drafts[a].savedAt))
+    .map(n => `<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`).join('');
+  document.getElementById('compare-draft-a').innerHTML = '<option value="">— Draft A —</option>' + opts;
+  document.getElementById('compare-draft-b').innerHTML = '<option value="">— Draft B —</option>' + opts;
+  document.getElementById('mock-compare-body').innerHTML = '<div style="color:var(--muted);text-align:center;padding:40px;">Select two saved drafts above to compare them</div>';
+  document.getElementById('compare-diff-badge').textContent = '';
+  document.getElementById('mock-compare-modal').style.display = 'flex';
+}
+function closeMockCompareModal() { document.getElementById('mock-compare-modal').style.display = 'none'; }
+
+function renderMockCompare() {
+  const nameA = document.getElementById('compare-draft-a').value;
+  const nameB = document.getElementById('compare-draft-b').value;
+  const body = document.getElementById('mock-compare-body');
+  const badge = document.getElementById('compare-diff-badge');
+  if (!nameA || !nameB) { body.innerHTML = '<div style="color:var(--muted);text-align:center;padding:40px;">Select two saved drafts above</div>'; badge.textContent=''; return; }
+  if (nameA === nameB) { body.innerHTML = '<div style="color:var(--muted);text-align:center;padding:40px;">Select two different drafts</div>'; badge.textContent=''; return; }
+
+  const drafts = getSavedDrafts();
+  const dA = drafts[nameA], dB = drafts[nameB];
+  if (!dA || !dB) return;
+
+  const picksA = dA.picks || [], picksB = dB.picks || [];
+  let diffCount = 0;
+  let html = '';
+  let lastRound = 0;
+
+  MOCK_PICKS.forEach((pick, i) => {
+    const pIdA = picksA[i]?.id || null;
+    const pIdB = picksB[i]?.id || null;
+    const pA = pIdA ? PROSPECTS.find(x => x.id === pIdA) : null;
+    const pB = pIdB ? PROSPECTS.find(x => x.id === pIdB) : null;
+    const same = pIdA === pIdB;
+    if (!same) diffCount++;
+
+    if (pick.round !== lastRound) {
+      html += `<div style="padding:6px 0 4px;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:2px;color:var(--muted);border-bottom:1px solid var(--border);margin-bottom:4px;">ROUND ${pick.round}</div>`;
+      lastRound = pick.round;
+    }
+
+    // Skip identical picks where both are empty — only show picks with at least one player or a difference
+    if (!pA && !pB) return;
+
+    const team = pickOwner(pick);
+    const rowBg = !same ? 'background:rgba(212,160,23,0.07);border-radius:6px;' : '';
+    const diffDot = !same ? `<span style="width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block;flex-shrink:0;" title="Different pick"></span>` : `<span style="width:6px;height:6px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0;"></span>`;
+
+    const playerCell = (p) => p
+      ? `<div style="display:flex;align-items:center;gap:6px;"><span class="pos-badge pos-${p.pos}" style="font-size:9px;padding:1px 5px;">${p.pos}</span><span style="font-size:12px;font-weight:600;color:var(--text);">${p.name}</span><span style="font-size:10px;color:var(--muted);">${p.school}</span></div>`
+      : `<div style="font-size:11px;color:var(--muted);font-style:italic;">— No pick —</div>`;
+
+    html += `<div style="display:grid;grid-template-columns:32px 80px 1fr 1fr;align-items:center;gap:8px;padding:5px 4px;${rowBg}margin-bottom:2px;">
+      ${diffDot}
+      <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;">#${pick.pick} ${team.length>10?team.slice(0,10)+'…':team}</div>
+      ${playerCell(pA)}
+      ${playerCell(pB)}
+    </div>`;
+  });
+
+  const totalFilled = MOCK_PICKS.filter((_,i) => picksA[i]?.id || picksB[i]?.id).length;
+  badge.innerHTML = `<span style="color:${diffCount>0?'var(--gold)':'var(--green)'};">${diffCount} difference${diffCount!==1?'s':''}</span> across ${totalFilled} picks`;
+
+  // Header row
+  const inputStyle = 'font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);';
+  body.innerHTML = `<div style="display:grid;grid-template-columns:32px 80px 1fr 1fr;gap:8px;padding:4px;margin-bottom:8px;border-bottom:1px solid var(--border);">
+    <div></div><div></div>
+    <div style="${inputStyle}">${nameA}</div>
+    <div style="${inputStyle}">${nameB}</div>
+  </div>${html}`;
+}
+
 // ── CPU TRADE OFFERS ──────────────────────────────────────────────────
 let _pendingCPUTrade = null; // { offeringTeam, myPick, offer1, offer2, target, totalVal, myVal }
 
@@ -5625,6 +5838,8 @@ function printBoard() {
   loadBoardLock();
   renderBoard();
   if (getApiKey()) { document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
+  updateDraftCountdown();
+  setInterval(updateDraftCountdown, 1000);
 })();
 </script>
 
@@ -5647,6 +5862,27 @@ function printBoard() {
       <button class="modal-close" onclick="closeTradeLogModal()">✕ Close</button>
     </div>
     <div id="trade-log-body" style="padding:20px;overflow-y:auto;max-height:70vh;"></div>
+  </div>
+</div>
+
+<!-- MOCK COMPARE MODAL -->
+<div id="mock-compare-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeMockCompareModal()">
+  <div class="modal-box" style="max-width:820px;">
+    <div class="modal-header">
+      <h2>⚖️ Compare Mock Drafts</h2>
+      <button class="modal-close" onclick="closeMockCompareModal()">✕ Close</button>
+    </div>
+    <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <select id="compare-draft-a" onchange="renderMockCompare()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;flex:1;min-width:160px;">
+        <option value="">— Draft A —</option>
+      </select>
+      <span style="color:var(--muted);font-weight:700;">vs</span>
+      <select id="compare-draft-b" onchange="renderMockCompare()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;flex:1;min-width:160px;">
+        <option value="">— Draft B —</option>
+      </select>
+      <div id="compare-diff-badge" style="font-size:12px;color:var(--muted);white-space:nowrap;"></div>
+    </div>
+    <div id="mock-compare-body" style="padding:20px;overflow-y:auto;max-height:65vh;"></div>
   </div>
 </div>
 
