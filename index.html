@@ -3274,6 +3274,28 @@ function simulateSinglePick(pick, forcedTarget) {
     return;
   }
 
+  // Blue-chip snap-up: elite prospects get pulled toward their projected slot.
+  // Base probability applies as soon as the pick reaches their board position;
+  // probability climbs with every pick they've slipped past it.
+  //   Grade 95+ (top-5 talent):  50% base, +8% per pick slipped, cap 92%
+  //   Grade 90-94 (top-32):      30% base, +8% per pick slipped, cap 85%
+  //   Grade 85-89 (top-100):     15% base, +7% per pick slipped, cap 75%
+  const top = available[0];
+  const topGrade = computeGrade(top);
+  const boardRank = PROSPECTS.indexOf(top) + 1;
+  const slippage = Math.max(0, pick.pick - boardRank);
+  let snapProb = 0;
+  if      (topGrade >= 95) snapProb = Math.min(0.92, 0.50 + slippage * 0.08);
+  else if (topGrade >= 90) snapProb = Math.min(0.85, 0.30 + slippage * 0.08);
+  else if (topGrade >= 85) snapProb = Math.min(0.75, 0.15 + slippage * 0.07);
+
+  if (snapProb > 0 && Math.random() < snapProb) {
+    pick.playerId = top.id;
+    pick.simulated = true;
+    return;
+  }
+
+  // Standard need-weighted pool selection
   const poolSize = Math.min(available.length, Math.max(3, pick.round * 3));
   const pool = available.slice(0, poolSize);
   const needPool = pool.filter(p => teamNeeds.includes(p.pos));
