@@ -584,6 +584,7 @@
       <button class="btn btn-outline" style="font-size:12px;" onclick="openTradeLogModal()">📋 Trade Log</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openTeamDraftModal()">👥 Team View</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openMockCompareModal()">⚖️ Compare</button>
+      <button class="btn btn-outline" id="sim-locks-btn" style="font-size:12px;" onclick="openSimLocksModal()">🔒 Sim Locks</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
       <button class="btn btn-outline sfx-mute-btn" style="font-size:12px;" onclick="SFX.toggleMute()">🔊 Sound</button>
     </div>
@@ -860,6 +861,36 @@
       <button class="modal-close" onclick="closeLoadDraftModal()">✕ Close</button>
     </div>
     <div class="modal-body" id="load-draft-body" style="padding:16px;max-height:60vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- SIM LOCKS MODAL -->
+<div id="sim-locks-modal" style="display:none;" class="modal-overlay" onclick="if(event.target===this)closeSimLocksModal()">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-header">
+      <h2>🔒 Sim Locks</h2>
+      <button class="modal-close" onclick="closeSimLocksModal()">✕ Close</button>
+    </div>
+    <div class="modal-body" style="padding:16px;">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        Force specific players to always be taken at specific picks in every simulation — regardless of team needs. Use this for consensus sure-things like a guaranteed #1 overall. Locks persist across resets and can be updated each year.
+      </p>
+      <div id="sim-locks-list"></div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px;">Add Lock</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:12px;color:var(--muted);">Pick #</span>
+            <input type="number" id="sim-lock-pick-input" min="1" placeholder="1"
+              style="width:64px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;">
+          </div>
+          <select id="sim-lock-player-select"
+            style="flex:1;min-width:200px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;font-family:'DM Sans',sans-serif;">
+          </select>
+          <button class="btn btn-gold" style="font-size:12px;" onclick="addSimLock()">+ Add</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2814,6 +2845,11 @@ let selectedMockPick = null;
 let mockBoardSort = 'my';
 let mockBoardFilter = 'ALL';
 let myMockTeam = null;
+
+// SIM_LOCKS: { [pickNum]: playerId } — players guaranteed to be taken at specific picks during simulation
+let SIM_LOCKS = {};
+function saveSimLocks() { try { localStorage.setItem('nfl_sim_locks', JSON.stringify(SIM_LOCKS)); } catch(e) {} }
+function loadSimLocks() { try { const s = localStorage.getItem('nfl_sim_locks'); if (s) SIM_LOCKS = JSON.parse(s); } catch(e) {} }
 let mockPicksView = 'list';
 let mockProfileProspect = null;
 let mockProfileTab = 'profile';
@@ -3266,6 +3302,14 @@ function simulateSinglePick(pick, forcedTarget) {
     .filter(p => !draftedIds.has(p.id))
     .sort((a, b) => computeGrade(b) - computeGrade(a));
   if (!available.length) return;
+
+  // Sim lock: this pick is pinned to a specific player — always take them if still available
+  const lockedId = SIM_LOCKS[pick.pick];
+  if (lockedId !== undefined && !draftedIds.has(lockedId)) {
+    pick.playerId = lockedId;
+    pick.simulated = true;
+    return;
+  }
 
   // If the pick was acquired via a trade for a specific player, take that player 85% of the time
   if (forcedTarget && !draftedIds.has(forcedTarget.id) && Math.random() < 0.85) {
@@ -4570,6 +4614,90 @@ function openLoadDraftModal() {
 
 function closeLoadDraftModal() {
   document.getElementById('load-draft-modal').style.display = 'none';
+}
+
+// ── SIM LOCKS ────────────────────────────────────────────────────────
+function openSimLocksModal() {
+  document.getElementById('sim-locks-modal').style.display = 'flex';
+  renderSimLocksList();
+  // Populate player dropdown sorted by grade
+  const sel = document.getElementById('sim-lock-player-select');
+  const sorted = [...PROSPECTS].sort((a, b) => computeGrade(b) - computeGrade(a));
+  sel.innerHTML = sorted.map(p => {
+    const rank = PROSPECTS.indexOf(p) + 1;
+    return `<option value="${p.id}">#${rank} ${p.name} (${p.pos})</option>`;
+  }).join('');
+}
+
+function closeSimLocksModal() {
+  document.getElementById('sim-locks-modal').style.display = 'none';
+}
+
+function renderSimLocksList() {
+  const el = document.getElementById('sim-locks-list');
+  const entries = Object.entries(SIM_LOCKS).sort((a, b) => Number(a[0]) - Number(b[0]));
+  if (!entries.length) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--muted);font-style:italic;padding:8px 0;">No locks set. All picks will simulate normally.</div>`;
+    return;
+  }
+  const rows = entries.map(([pickNum, playerId]) => {
+    const p = PROSPECTS.find(x => x.id === playerId);
+    const name = p ? `${p.name} (${p.pos})` : `Unknown player (id ${playerId})`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--gold);min-width:60px;">Pick #${pickNum}</span>
+      <span style="flex:1;font-size:13px;color:var(--text);">${name}</span>
+      <button class="btn btn-outline" style="font-size:11px;padding:4px 8px;color:#e03030;border-color:#e03030;" onclick="removeSimLock(${pickNum})">Remove</button>
+    </div>`;
+  }).join('');
+  el.innerHTML = rows + `<div style="margin-top:10px;text-align:right;">
+    <button class="btn btn-outline" style="font-size:11px;color:#e03030;border-color:#e03030;" onclick="clearAllSimLocks()">Clear All Locks</button>
+  </div>`;
+}
+
+function addSimLock() {
+  const pickInput = document.getElementById('sim-lock-pick-input');
+  const playerSel = document.getElementById('sim-lock-player-select');
+  const pickNum = parseInt(pickInput.value);
+  const playerId = parseInt(playerSel.value);
+  if (!pickNum || pickNum < 1 || pickNum > MOCK_PICKS.length) {
+    showToast(`Pick number must be between 1 and ${MOCK_PICKS.length}`); return;
+  }
+  if (!playerId) { showToast('Select a player'); return; }
+  // Check if this player is already locked to another pick
+  const existing = Object.entries(SIM_LOCKS).find(([, id]) => id === playerId);
+  if (existing) delete SIM_LOCKS[existing[0]];
+  SIM_LOCKS[pickNum] = playerId;
+  saveSimLocks();
+  pickInput.value = '';
+  renderSimLocksList();
+  updateSimLocksBtnStyle();
+  const p = PROSPECTS.find(x => x.id === playerId);
+  showToast(`🔒 ${p?.name || 'Player'} locked to pick #${pickNum}`);
+}
+
+function removeSimLock(pickNum) {
+  delete SIM_LOCKS[pickNum];
+  saveSimLocks();
+  renderSimLocksList();
+  updateSimLocksBtnStyle();
+}
+
+function clearAllSimLocks() {
+  if (!Object.keys(SIM_LOCKS).length) return;
+  SIM_LOCKS = {};
+  saveSimLocks();
+  renderSimLocksList();
+  updateSimLocksBtnStyle();
+  showToast('All sim locks cleared');
+}
+
+function updateSimLocksBtnStyle() {
+  const btn = document.getElementById('sim-locks-btn');
+  if (!btn) return;
+  const count = Object.keys(SIM_LOCKS).length;
+  btn.style.borderColor = count ? 'var(--gold)' : '';
+  btn.style.color = count ? 'var(--gold)' : '';
+  btn.textContent = count ? `🔒 Sim Locks (${count})` : '🔒 Sim Locks';
 }
 
 function renderLoadDraftList() {
@@ -6199,6 +6327,8 @@ document.addEventListener('keydown', e => {
   setInterval(updateDraftCountdown, 1000);
   // Sync mute button labels to saved preference
   if (SFX.isMuted()) SFX.setMuted(true);
+  loadSimLocks();
+  updateSimLocksBtnStyle();
 })();
 
 // ── SOUND ENGINE ─────────────────────────────────────────────────────
