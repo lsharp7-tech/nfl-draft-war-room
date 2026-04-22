@@ -3621,13 +3621,49 @@ function valueScore(pick) {
   return Math.round(raw * roundWeight(pick.round));
 }
 
-// Adjusted score adds a needs bonus scaled by round weight (R1=+15, R2=+10, R3=+7.5, R4-7=+5)
-function adjustedScore(pick, needs) {
+// Full pick scoring with needs bonus, not-a-need penalty, and redundancy penalty.
+// posCountBefore = how many of this position the team has already drafted before this pick.
+const SINGLETON_POSITIONS = new Set(['QB', 'K', 'P', 'LS']);
+function scorePick(pick, needs, posCountBefore) {
   const base = valueScore(pick);
   if (base === null) return null;
   const p = PROSPECTS.find(x => x.id === pick.playerId);
-  const needsBonus = (p && needs && needs.includes(p.pos)) ? 5 * roundWeight(pick.round) : 0;
-  return base + needsBonus;
+  if (!p) return null;
+  const w = roundWeight(pick.round);
+  const isNeed = needs && needs.includes(p.pos);
+  const hasNeeds = needs && needs.length > 0;
+
+  const needsBonus    = isNeed ? 5 * w : 0;
+  const notNeedPenalty = (hasNeeds && !isNeed) ? -5 * w : 0;
+
+  // Redundancy: harsher if position isn't even a need
+  let redundancyPenalty = 0;
+  if (isNeed) {
+    // Filling a need — mild penalty only on heavy stacking
+    if (posCountBefore >= 3)      redundancyPenalty = -20 * w;
+    else if (posCountBefore >= 2) redundancyPenalty = -10 * w;
+  } else {
+    // Not a need — redundancy kicks in on the 2nd pick at this position
+    if (SINGLETON_POSITIONS.has(p.pos)) {
+      if (posCountBefore >= 2)      redundancyPenalty = -35 * w;
+      else if (posCountBefore >= 1) redundancyPenalty = -25 * w;
+    } else {
+      if (posCountBefore >= 3)      redundancyPenalty = -15 * w;
+      else if (posCountBefore >= 2) redundancyPenalty = -10 * w;
+    }
+  }
+
+  return {
+    total: base + needsBonus + notNeedPenalty + redundancyPenalty,
+    base, needsBonus, notNeedPenalty, redundancyPenalty,
+    fillsNeed: isNeed, notANeed: !isNeed && hasNeeds, isRedundant: redundancyPenalty < 0,
+  };
+}
+
+// Legacy wrapper — used by Otis prompts and the compare modal
+function adjustedScore(pick, needs) {
+  const result = scorePick(pick, needs, 0);
+  return result ? result.total : null;
 }
 
 // Thresholds account for round weighting (R1 picks worth 3x)
@@ -3655,13 +3691,23 @@ function buildTeamReport() {
 
   return Object.entries(teams).map(([team, picks]) => {
     const allFilled = picks.filter(p => p.playerId);
-    // Only grade real (non-simulated) picks
-    const filled = allFilled.filter(p => !p.simulated);
+    // Only grade real (non-simulated) picks; sort by pick number for position-count tracking
+    const filled = allFilled.filter(p => !p.simulated).sort((a, b) => a.pick - b.pick);
     const simCount = allFilled.length - filled.length;
     const needs = TEAM_NEEDS[team] || [];
-    const scores = filled.map(pick => adjustedScore(pick, needs)).filter(v => v !== null);
+
+    const posCount = {};
+    const pickScores = filled.map(pick => {
+      const p = PROSPECTS.find(x => x.id === pick.playerId);
+      const pos = p?.pos;
+      const before = pos ? (posCount[pos] || 0) : 0;
+      if (pos) posCount[pos] = before + 1;
+      return { pick, scored: scorePick(pick, needs, before) };
+    });
+
+    const scores = pickScores.map(({ scored }) => scored?.total).filter(v => v !== null);
     const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-    return { team, picks, filled, simCount, avg, grade: avg !== null ? gradeFromValue(avg) : null };
+    return { team, picks, filled, simCount, avg, grade: avg !== null ? gradeFromValue(avg) : null, pickScores };
   }).sort((a, b) => (b.avg ?? -999) - (a.avg ?? -999));
 }
 
@@ -3692,25 +3738,38 @@ function openDraftSummary() {
 function renderDraftSummary(myPicks) {
   const body = document.getElementById('summary-body');
   const needs = TEAM_NEEDS[myMockTeam] || [];
-  const scores = myPicks.map(pick => adjustedScore(pick, needs)).filter(v => v !== null);
+  const sortedPicks = [...myPicks].sort((a, b) => a.pick - b.pick);
+  const posCount = {};
+  const scoredPicks = sortedPicks.map(pick => {
+    const p = PROSPECTS.find(x => x.id === pick.playerId);
+    const pos = p?.pos;
+    const before = pos ? (posCount[pos] || 0) : 0;
+    if (pos) posCount[pos] = before + 1;
+    return { pick, scored: scorePick(pick, needs, before) };
+  });
+  const scores = scoredPicks.map(({ scored }) => scored?.total).filter(v => v !== null);
   const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   const grade = scores.length ? gradeFromValue(avg) : null;
 
-  const pickRows = myPicks.map(pick => {
+  const pickRows = scoredPicks.map(({ pick, scored }) => {
     const p = PROSPECTS.find(x => x.id === pick.playerId);
     if (!p) return '';
     const boardRank = PROSPECTS.indexOf(p) + 1;
-    const score = valueScore(pick);
-    const fillsNeed = needs.includes(p.pos);
-    const scoreStr = score > 0
-      ? `<span class="rc-value-pos">+${score}</span>`
-      : score < 0 ? `<span class="rc-value-neg">${score}</span>`
+    const displayScore = scored ? scored.total : valueScore(pick);
+    const scoreStr = displayScore > 0
+      ? `<span class="rc-value-pos">+${Math.round(displayScore)}</span>`
+      : displayScore < 0 ? `<span class="rc-value-neg">${Math.round(displayScore)}</span>`
       : `<span style="color:var(--muted)">±0</span>`;
+    const flags = scored
+      ? (scored.fillsNeed   ? '<span style="color:var(--green);font-size:11px;">✓ Need</span> ' : '')
+      + (scored.notANeed    ? '<span style="color:#f59e0b;font-size:11px;">⚠ Not a need</span> ' : '')
+      + (scored.isRedundant ? '<span style="color:#e03030;font-size:11px;">⚠ Redundant</span>' : '')
+      : '';
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
       <span style="font-size:11px;color:var(--muted);white-space:nowrap;min-width:60px;">Rd ${pick.round}, #${pick.pick}</span>
       <span class="pos-badge pos-${p.pos}" style="font-size:10px;padding:2px 6px;">${p.pos}</span>
       <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;color:var(--text);">${p.name}${fillsNeed ? ' <span style="color:var(--green);font-size:11px;">✓ Need</span>' : ''}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);">${p.name} ${flags}</div>
         <div style="font-size:11px;color:var(--muted);">${p.school} · Board #${boardRank}</div>
       </div>
       <div>${scoreStr}</div>
@@ -3743,17 +3802,28 @@ async function summaryAskOtis() {
   if (el) el.textContent = 'Analyzing your draft class...';
   if (!getApiKey()) { if (el) el.textContent = '⚠️ No API key set.'; return; }
 
-  const scores = myPicks.map(pick => adjustedScore(pick, needs)).filter(v => v !== null);
+  const sortedPicks = [...myPicks].sort((a, b) => a.pick - b.pick);
+  const posCount2 = {};
+  const scoredForOtis = sortedPicks.map(pick => {
+    const p = PROSPECTS.find(x => x.id === pick.playerId);
+    const pos = p?.pos;
+    const before = pos ? (posCount2[pos] || 0) : 0;
+    if (pos) posCount2[pos] = before + 1;
+    return { pick, scored: scorePick(pick, needs, before) };
+  });
+  const scores = scoredForOtis.map(({ scored }) => scored?.total).filter(v => v !== null);
   const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
   const grade = gradeFromValue(avg);
 
-  const picksText = myPicks.map(pick => {
+  const picksText = scoredForOtis.map(({ pick, scored }) => {
     const p = PROSPECTS.find(x => x.id === pick.playerId);
     if (!p) return '';
     const boardRank = PROSPECTS.indexOf(p) + 1;
-    const score = valueScore(pick);
-    const fillsNeed = needs.includes(p.pos);
-    return `Round ${pick.round}, Pick #${pick.pick}: ${p.name} (${p.pos}, ${p.school}) — Board rank #${boardRank}, Value score: ${score > 0 ? '+' : ''}${score}${fillsNeed ? ' [fills need]' : ''}`;
+    const baseScore = valueScore(pick);
+    const tags = scored
+      ? (scored.fillsNeed ? ' [fills need]' : '') + (scored.notANeed ? ' [not a team need]' : '') + (scored.isRedundant ? ' [redundant position]' : '')
+      : '';
+    return `Round ${pick.round}, Pick #${pick.pick}: ${p.name} (${p.pos}, ${p.school}) — Board rank #${boardRank}, Base value: ${baseScore > 0 ? '+' : ''}${baseScore}${tags}`;
   }).join('\n');
 
   const tradeCtx = buildTradeContext(myMockTeam);
@@ -3790,24 +3860,28 @@ function renderReportCard() {
   const report = buildTeamReport();
   const body = document.getElementById('report-body');
 
-  const rows = report.map(({ team, picks, filled, simCount, avg, grade }) => {
+  const rows = report.map(({ team, picks, filled, simCount, avg, grade, pickScores }) => {
     if (filled.length === 0) return '';
     const needs = TEAM_NEEDS[team] || [];
     const needsBadges = needs.map(pos =>
       `<span class="pos-badge pos-${pos}" style="font-size:9px;padding:1px 5px;">${pos}</span>`
     ).join(' ');
 
-    const picksList = filled.map(pick => {
+    const picksList = pickScores.map(({ pick, scored }) => {
       const p = PROSPECTS.find(x => x.id === pick.playerId);
-      const score = valueScore(pick);
       const boardRank = PROSPECTS.indexOf(p) + 1;
-      const fillsNeed = needs.includes(p.pos);
-      const scoreStr = score > 0
-        ? `<span class="rc-value-pos">+${score}</span>`
-        : score < 0 ? `<span class="rc-value-neg">${score}</span>`
+      const displayScore = scored ? scored.total : valueScore(pick);
+      const scoreStr = displayScore > 0
+        ? `<span class="rc-value-pos">+${Math.round(displayScore)}</span>`
+        : displayScore < 0 ? `<span class="rc-value-neg">${Math.round(displayScore)}</span>`
         : `<span style="color:var(--muted)">=</span>`;
-      const needIcon = fillsNeed ? `<span style="color:var(--green);font-size:10px;" title="Fills a team need">✓</span>` : '';
-      return `<span style="color:${fillsNeed ? 'var(--text)' : 'var(--muted)'}">#${pick.pick} ${p.name} (${p.pos}) — board: #${boardRank} ${scoreStr} ${needIcon}</span>`;
+      const flags = scored
+        ? (scored.fillsNeed   ? `<span style="color:var(--green);font-size:10px;" title="Fills a team need">✓</span>` : '')
+        + (scored.notANeed    ? `<span style="color:#f59e0b;font-size:10px;" title="Not a team need">⚠ need</span>` : '')
+        + (scored.isRedundant ? `<span style="color:#e03030;font-size:10px;" title="Redundant position">⚠ redundant</span>` : '')
+        : '';
+      const dimmed = scored && (scored.notANeed || scored.isRedundant);
+      return `<span style="color:${dimmed ? 'var(--muted)' : 'var(--text)'}">#${pick.pick} ${p.name} (${p.pos}) — board: #${boardRank} ${scoreStr} ${flags}</span>`;
     }).join('<br>');
 
     const avgStr = avg > 0
@@ -3850,7 +3924,7 @@ function renderReportCard() {
       </table>
     </div>
     <div style="padding:12px 16px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);">
-      Avg Value = (pick − board rank, capped ±30) × round weight + needs bonus (+5 per need filled). R1=3×, R2=2×, R3=1.5×, R4-7=1×. Positive = value, negative = reach.
+      Avg Value = (pick − board rank, capped ±30) × round weight + needs bonus (+5×Rw) − not-a-need penalty (−5×Rw) − redundancy penalty (QB/K/P 2nd: −25×Rw, 3rd+: −35×Rw; others 3rd: −10×Rw, 4th+: −15×Rw). R1=3×, R2=2×, R3=1.5×, R4-7=1×. ⚠ need = position not in team needs · ⚠ redundant = stacking same position.
     </div>`;
 }
 
