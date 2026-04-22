@@ -585,6 +585,7 @@
       <button class="btn btn-outline" style="font-size:12px;" onclick="openTeamDraftModal()">👥 Team View</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openMockCompareModal()">⚖️ Compare</button>
       <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
+      <button class="btn btn-outline sfx-mute-btn" style="font-size:12px;" onclick="SFX.toggleMute()">🔊 Sound</button>
     </div>
   </div>
   <div class="mock-layout">
@@ -708,6 +709,7 @@
       <button id="go-live-btn" class="btn btn-outline" style="font-size:12px;border-color:#27ae60;color:#27ae60;" onclick="toggleLivePolling()">▶ Go Live</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="undoLivePick()">↩ Undo</button>
       <button class="btn btn-red" style="font-size:12px;" onclick="resetLiveDraft()">↺ Reset</button>
+      <button class="btn btn-outline sfx-mute-btn" style="font-size:12px;" onclick="SFX.toggleMute()">🔊 Sound</button>
     </div>
   </div>
   <div class="live-layout">
@@ -3120,6 +3122,7 @@ function assignMockPick(playerId) {
   MOCK_PICKS.forEach(p => { if (p.playerId === playerId) p.playerId = null; });
   pick.playerId = playerId;
   pick.simulated = false;
+  SFX.pickFanfare();
   if (myMockTeam && isMyPick(pick)) {
     // In single-team mode, auto-sim to the next user pick
     saveMockDraft();
@@ -3302,6 +3305,7 @@ function simulateToMyPick() {
     // Check if a CPU team wants to trade up for our pick — show offer if so
     if (!checkForCPUTradeOffer(nextMine)) {
       showToast(`Your turn: Pick #${nextMine.pick} · ${nextMine.team}${tradeNote}`);
+      setTimeout(() => SFX.myPickAlert(), 200);
     }
   } else {
     showToast('All your picks have been made!');
@@ -4715,6 +4719,7 @@ function submitLivePick() {
     team: effectiveTeam,
     tradedFrom: livePickTeamOverride ? originalTeam : null,
   };
+  SFX.pickFanfare();
 
   liveCurrentPick++;
   while (liveCurrentPick <= MOCK_PICKS.length && LIVE_DRAFT_PICKS[liveCurrentPick]) liveCurrentPick++;
@@ -4930,6 +4935,7 @@ function checkRoundComplete(pickNum) {
   if (!roundPicks.length) return;
   const lastInRound = roundPicks[roundPicks.length - 1].pick;
   if (pickNum !== lastInRound) return;
+  SFX.roundComplete();
   if (LIVE_ROUND_RECAPS[pick.round]) return; // already recapped
   if (!getApiKey()) return;
   triggerRoundRecap(pick.round);
@@ -5457,12 +5463,14 @@ function toggleDraftClock(round) {
     draftClockInterval = setInterval(() => {
       if (draftClockTime > 0) {
         draftClockTime--;
+        SFX.clockTick(draftClockTime <= 30);
         renderLiveClock();
       } else {
         clearInterval(draftClockInterval);
         draftClockInterval = null;
         draftClockRunning = false;
         renderLiveClock();
+        SFX.clockBuzzer();
         showToast('⏰ Time is up!');
       }
     }, 1000);
@@ -6093,6 +6101,119 @@ document.addEventListener('keydown', e => {
   if (getApiKey()) { document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
   updateDraftCountdown();
   setInterval(updateDraftCountdown, 1000);
+  // Sync mute button labels to saved preference
+  if (SFX.isMuted()) SFX.setMuted(true);
+})();
+
+// ── SOUND ENGINE ─────────────────────────────────────────────────────
+const SFX = (() => {
+  let _ctx = null;
+  let _muted = localStorage.getItem('sfx_muted') === '1';
+
+  function getCtx() {
+    if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_ctx.state === 'suspended') _ctx.resume();
+    return _ctx;
+  }
+
+  function isMuted() { return _muted; }
+
+  function setMuted(v) {
+    _muted = v;
+    localStorage.setItem('sfx_muted', v ? '1' : '0');
+    document.querySelectorAll('.sfx-mute-btn').forEach(btn => {
+      btn.textContent = v ? '🔇 Sound' : '🔊 Sound';
+      btn.style.opacity = v ? '0.5' : '1';
+    });
+  }
+
+  function toggleMute() { setMuted(!_muted); }
+
+  // Play a single synthesized note
+  function note(freq, startTime, duration, volume, type, cutoff) {
+    const c = getCtx();
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    const filter = c.createBiquadFilter();
+    osc.type = type || 'sawtooth';
+    osc.frequency.value = freq;
+    filter.type = 'lowpass';
+    filter.frequency.value = cutoff || 2000;
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(volume, startTime + 0.02);
+    gain.gain.setValueAtTime(volume, startTime + duration * 0.65);
+    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+    osc.connect(filter); filter.connect(gain); gain.connect(c.destination);
+    osc.start(startTime); osc.stop(startTime + duration + 0.05);
+  }
+
+  // Triumphant pick fanfare — ascending C major arpeggio then sustained chord
+  function pickFanfare() {
+    if (_muted) return;
+    const c = getCtx(), now = c.currentTime;
+    note(261.63, now + 0.00, 0.16, 0.18, 'sawtooth', 1800); // C4
+    note(329.63, now + 0.14, 0.16, 0.18, 'sawtooth', 1800); // E4
+    note(392.00, now + 0.28, 0.16, 0.18, 'sawtooth', 1800); // G4
+    note(523.25, now + 0.42, 0.65, 0.20, 'sawtooth', 1800); // C5 — sustained
+    note(392.00, now + 0.42, 0.60, 0.14, 'sawtooth', 1800); // G4 harmony
+    note(329.63, now + 0.42, 0.55, 0.12, 'sawtooth', 1800); // E4 harmony
+    note(130.81, now + 0.42, 0.55, 0.14, 'square',   400);  // C3 bass
+  }
+
+  // More dramatic fanfare for when it's YOUR pick
+  function myPickAlert() {
+    if (_muted) return;
+    const c = getCtx(), now = c.currentTime;
+    note(196.00, now + 0.00, 0.13, 0.16, 'sawtooth', 1800); // G3
+    note(261.63, now + 0.11, 0.13, 0.18, 'sawtooth', 1800); // C4
+    note(329.63, now + 0.22, 0.13, 0.18, 'sawtooth', 1800); // E4
+    note(392.00, now + 0.33, 0.13, 0.20, 'sawtooth', 1800); // G4
+    note(523.25, now + 0.44, 0.80, 0.22, 'sawtooth', 1800); // C5
+    note(392.00, now + 0.44, 0.75, 0.16, 'sawtooth', 1800);
+    note(329.63, now + 0.44, 0.70, 0.13, 'sawtooth', 1800);
+    note(261.63, now + 0.44, 0.65, 0.11, 'sawtooth', 1800);
+    note(130.81, now + 0.44, 0.65, 0.16, 'square',   400);  // C3 bass
+  }
+
+  // Subtle metronome tick while draft clock runs
+  function clockTick(urgent) {
+    if (_muted) return;
+    const c = getCtx(), now = c.currentTime;
+    const freq = urgent ? 1100 : 750;
+    const vol  = urgent ? 0.13 : 0.07;
+    note(freq, now, 0.025, vol, 'square', 4000);
+  }
+
+  // Buzzer when clock expires
+  function clockBuzzer() {
+    if (_muted) return;
+    const c = getCtx(), now = c.currentTime;
+    [0, 0.18].forEach(offset => {
+      const osc = c.createOscillator(), gain = c.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(280, now + offset);
+      osc.frequency.linearRampToValueAtTime(90, now + offset + 0.55);
+      gain.gain.setValueAtTime(0.28, now + offset);
+      gain.gain.linearRampToValueAtTime(0, now + offset + 0.65);
+      osc.connect(gain); gain.connect(c.destination);
+      osc.start(now + offset); osc.stop(now + offset + 0.7);
+    });
+  }
+
+  // Round-complete ascending flourish
+  function roundComplete() {
+    if (_muted) return;
+    const c = getCtx(), now = c.currentTime;
+    [261.63, 293.66, 329.63, 392.00, 523.25].forEach((freq, i) => {
+      const last = i === 4;
+      note(freq, now + i * 0.09, last ? 0.7 : 0.14, 0.15, 'sawtooth', 2000);
+    });
+    note(392.00, now + 0.36, 0.70, 0.11, 'sawtooth', 2000);
+    note(329.63, now + 0.36, 0.65, 0.09, 'sawtooth', 2000);
+    note(130.81, now + 0.36, 0.60, 0.13, 'square', 400);
+  }
+
+  return { isMuted, toggleMute, setMuted, pickFanfare, myPickAlert, clockTick, clockBuzzer, roundComplete };
 })();
 </script>
 
