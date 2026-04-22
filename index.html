@@ -263,6 +263,15 @@
   .mock-board-panel::-webkit-scrollbar { width: 4px; }
   .mock-board-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
+  /* MOCK DRAFT HEADER DROPDOWNS */
+  .mock-dropdown { position:relative; display:inline-block; }
+  .mock-dropdown-menu { display:none; position:absolute; right:0; top:calc(100% + 4px); background:var(--surface); border:1px solid var(--border); border-radius:8px; min-width:180px; z-index:200; box-shadow:0 6px 20px rgba(0,0,0,0.4); overflow:hidden; }
+  .mock-dropdown-menu.open { display:block; }
+  .mock-dd-item { display:block; width:100%; padding:9px 14px; font-size:12px; color:var(--text); background:none; border:none; text-align:left; cursor:pointer; font-family:'DM Sans',sans-serif; white-space:nowrap; }
+  .mock-dd-item:hover { background:var(--surface2); color:var(--gold2); }
+  .mock-dd-divider { border:none; border-top:1px solid var(--border); margin:3px 0; }
+  .mock-dd-item.danger:hover { color:#e03030; }
+
   /* MOCK DRAFT */
   .mock-layout { display:flex; gap:0; height:calc(100vh - 120px); width:100%; }
   .mock-picks-panel { width:360px; border-right:1px solid var(--border); overflow-y:auto; flex-shrink:0; }
@@ -571,21 +580,39 @@
       </div>
       <button id="sim-to-my-pick-btn" class="btn btn-blue" onclick="simulateToMyPick()" style="display:none;font-size:12px;">⚡ Sim to My Pick</button>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span id="mock-progress-counter" style="font-size:11px;color:var(--muted);white-space:nowrap;"></span>
+
       <button class="btn btn-outline" style="font-size:12px;" onclick="simAllRemaining()">⚡ Sim All</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="undoLastPick()">↩ Undo</button>
       <button class="btn btn-outline" style="font-size:12px;" onclick="openTradeModal()">🔄 Trade</button>
-      <button class="btn btn-outline" style="font-size:12px;" onclick="saveDraftAs()">💾 Save</button>
-      <button class="btn btn-outline" style="font-size:12px;" onclick="openLoadDraftModal()">📂 Load</button>
-      <button class="btn btn-outline" onclick="resetMockDraft()">↺ Reset</button>
-      <button class="btn btn-outline" onclick="exportMockDraft()">⬇ Export Draft</button>
-      <button class="btn btn-outline" style="font-size:12px;" onclick="openReachesModal()">🎯 Reaches & Steals</button>
-      <button class="btn btn-outline" style="font-size:12px;" onclick="openTradeLogModal()">📋 Trade Log</button>
-      <button class="btn btn-outline" style="font-size:12px;" onclick="openTeamDraftModal()">👥 Team View</button>
-      <button class="btn btn-outline" style="font-size:12px;" onclick="openMockCompareModal()">⚖️ Compare</button>
-      <button class="btn btn-outline" id="sim-locks-btn" style="font-size:12px;" onclick="openSimLocksModal()">🔒 Sim Locks</button>
-      <button class="btn btn-gold" onclick="openReportCard()">📊 Report Card</button>
+
+      <!-- Draft management dropdown -->
+      <div class="mock-dropdown">
+        <button class="btn btn-outline" style="font-size:12px;" onclick="toggleMockDropdown('draft-dd')">📁 Draft ▾</button>
+        <div class="mock-dropdown-menu" id="draft-dd">
+          <button class="mock-dd-item" onclick="saveDraftAs();closeMockDropdowns()">💾 Save Draft</button>
+          <button class="mock-dd-item" onclick="openLoadDraftModal();closeMockDropdowns()">📂 Load Draft</button>
+          <button class="mock-dd-item" onclick="exportMockDraft();closeMockDropdowns()">⬇ Export CSV</button>
+          <hr class="mock-dd-divider">
+          <button class="mock-dd-item" id="sim-locks-btn" onclick="openSimLocksModal();closeMockDropdowns()">🔒 Sim Locks</button>
+          <hr class="mock-dd-divider">
+          <button class="mock-dd-item danger" onclick="resetMockDraft();closeMockDropdowns()">↺ Reset Draft</button>
+        </div>
+      </div>
+
+      <!-- Analysis dropdown -->
+      <div class="mock-dropdown">
+        <button class="btn btn-outline" style="font-size:12px;" onclick="toggleMockDropdown('analysis-dd')">📊 Analysis ▾</button>
+        <div class="mock-dropdown-menu" id="analysis-dd">
+          <button class="mock-dd-item" onclick="openReachesModal();closeMockDropdowns()">🎯 Reaches &amp; Steals</button>
+          <button class="mock-dd-item" onclick="openTradeLogModal();closeMockDropdowns()">📋 Trade Log</button>
+          <button class="mock-dd-item" onclick="openTeamDraftModal();closeMockDropdowns()">👥 Team View</button>
+          <button class="mock-dd-item" onclick="openMockCompareModal();closeMockDropdowns()">⚖️ Compare</button>
+        </div>
+      </div>
+
+      <button class="btn btn-gold" style="font-size:12px;" onclick="openReportCard()">📊 Report Card</button>
       <button class="btn btn-outline sfx-mute-btn" style="font-size:12px;" onclick="SFX.toggleMute()">🔊 Sound</button>
     </div>
   </div>
@@ -4695,7 +4722,6 @@ function updateSimLocksBtnStyle() {
   const btn = document.getElementById('sim-locks-btn');
   if (!btn) return;
   const count = Object.keys(SIM_LOCKS).length;
-  btn.style.borderColor = count ? 'var(--gold)' : '';
   btn.style.color = count ? 'var(--gold)' : '';
   btn.textContent = count ? `🔒 Sim Locks (${count})` : '🔒 Sim Locks';
 }
@@ -6441,6 +6467,21 @@ const SFX = (() => {
 
   return { isMuted, toggleMute, setMuted, pickFanfare, myPickAlert, clockTick, clockBuzzer, roundComplete };
 })();
+
+// ── MOCK DRAFT HEADER DROPDOWNS ───────────────────────────────────────
+function toggleMockDropdown(id) {
+  const menu = document.getElementById(id);
+  const isOpen = menu.classList.contains('open');
+  closeMockDropdowns();
+  if (!isOpen) menu.classList.add('open');
+}
+function closeMockDropdowns() {
+  document.querySelectorAll('.mock-dropdown-menu').forEach(m => m.classList.remove('open'));
+}
+// Close when clicking outside any dropdown
+document.addEventListener('click', e => {
+  if (!e.target.closest('.mock-dropdown')) closeMockDropdowns();
+});
 </script>
 
 <!-- REACHES & STEALS MODAL -->
