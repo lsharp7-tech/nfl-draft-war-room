@@ -492,6 +492,8 @@
       <button class="filter-btn" id="tiers-toggle-btn" onclick="toggleTierZones()">🏷 Edit Tiers</button>
       <button class="filter-btn" onclick="autoTier()">⚡ Auto-Tier</button>
       <button class="filter-btn" onclick="clearAllTiers()">✕ Clear Tiers</button>
+      <div style="width:1px;height:16px;background:var(--border);margin:0 4px;"></div>
+      <button class="filter-btn" onclick="applyConsensusToMyBoard()" title="Reorder My Board to match expert consensus, then drag to customize">↓ Reset to Consensus</button>
     </div>
     <div id="combine-row" style="display:none;" class="combine-row">
       <span class="combine-label">Combine Filters:</span>
@@ -1497,6 +1499,19 @@ function resetRankings() {
   saveProspects();
   renderBoard();
   showToast('Rankings reset to default');
+}
+
+function applyConsensusToMyBoard() {
+  if (!confirm('Reset My Board order to expert consensus? You can drag to customize after.')) return;
+  PROSPECTS.sort((a, b) => consensusRank(a) - consensusRank(b));
+  PROSPECTS.forEach((p, i) => { p.myRank = i + 1; });
+  currentSort = 'my';
+  document.querySelectorAll('[id^="sort-"]').forEach(b => b.classList.remove('active'));
+  const myBtn = document.getElementById('sort-my');
+  if (myBtn) myBtn.classList.add('active');
+  saveProspects();
+  renderBoard();
+  showToast('Board set to consensus order — drag to customize');
 }
 
 // ── DETAIL ───────────────────────────────────────────────────────────
