@@ -6441,10 +6441,6 @@ document.addEventListener('keydown', e => {
   if (getApiKey()) { document.getElementById('key-btn').style.borderColor = 'var(--green)'; document.getElementById('key-btn').style.color = 'var(--green)'; }
   updateDraftCountdown();
   setInterval(updateDraftCountdown, 1000);
-  // Sync mute button labels to saved preference
-  if (SFX.isMuted()) SFX.setMuted(true);
-  loadSimLocks();
-  updateSimLocksBtnStyle();
 })();
 
 // ── SOUND ENGINE ─────────────────────────────────────────────────────
@@ -6557,6 +6553,11 @@ const SFX = (() => {
 
   return { isMuted, toggleMute, setMuted, pickFanfare, myPickAlert, clockTick, clockBuzzer, roundComplete };
 })();
+
+// Post-SFX init — these depend on SFX being defined first
+if (SFX.isMuted()) SFX.setMuted(true);
+loadSimLocks();
+updateSimLocksBtnStyle();
 
 // ── MOCK DRAFT HEADER DROPDOWNS ───────────────────────────────────────
 function toggleMockDropdown(id) {
