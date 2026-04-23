@@ -263,6 +263,13 @@
   .mock-board-panel::-webkit-scrollbar { width: 4px; }
   .mock-board-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
+  /* CPU TRADE BANNER */
+  .cpu-trade-banner { display:none; align-items:center; justify-content:space-between; padding:9px 20px; background:linear-gradient(90deg,#1a1200,#12151c); border-bottom:1px solid var(--gold); cursor:pointer; flex-shrink:0; }
+  .cpu-trade-banner:hover { background:linear-gradient(90deg,#241a00,#12151c); }
+  .cpu-trade-banner-left { display:flex; align-items:center; gap:10px; font-size:13px; }
+  .cpu-trade-banner-pill { background:var(--gold); color:#000; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:0.5px; }
+  .cpu-trade-banner-right { font-size:11px; color:var(--gold); white-space:nowrap; }
+
   /* MOCK DRAFT HEADER DROPDOWNS */
   .mock-dropdown { position:relative; display:inline-block; }
   .mock-dropdown-menu { display:none; position:absolute; right:0; top:calc(100% + 4px); background:var(--surface); border:1px solid var(--border); border-radius:8px; min-width:180px; z-index:200; box-shadow:0 6px 20px rgba(0,0,0,0.4); overflow:hidden; }
@@ -618,6 +625,15 @@
       <button class="btn btn-outline sfx-mute-btn" style="font-size:12px;" onclick="SFX.toggleMute()">🔊 Sound</button>
     </div>
   </div>
+  <!-- Pending CPU trade offer banner (shows when modal is dismissed to view board) -->
+  <div id="cpu-trade-banner" class="cpu-trade-banner" onclick="reopenCPUTradeModal()">
+    <div class="cpu-trade-banner-left">
+      <span class="cpu-trade-banner-pill">Trade Offer</span>
+      <span id="cpu-trade-banner-text" style="color:var(--text);"></span>
+    </div>
+    <div class="cpu-trade-banner-right">Tap to view offer →</div>
+  </div>
+
   <div class="mock-layout">
     <div class="mock-picks-panel" id="mock-picks-panel"></div>
     <div class="mock-board-panel" id="mock-board-panel"></div>
@@ -6019,9 +6035,12 @@ function renderMockCompare() {
 }
 
 // ── CPU TRADE OFFERS ──────────────────────────────────────────────────
-let _pendingCPUTrade = null; // { offeringTeam, myPick, offer1, offer2, target, totalVal, myVal }
+let _pendingCPUTrades = []; // array of { offeringTeam, myPick, offer1, offer2, target, totalOffer, myVal }
+let _currentOfferIdx = 0;
 
 function checkForCPUTradeOffer(myPickObj) {
+  _pendingCPUTrades = [];
+  _currentOfferIdx = 0;
   if (!myMockTeam || !myPickObj) return false;
   const round = myPickObj.round;
 
@@ -6033,13 +6052,11 @@ function checkForCPUTradeOffer(myPickObj) {
   const available = [...PROSPECTS].filter(p => !draftedIds.has(p.id)).sort((a,b) => computeGrade(b) - computeGrade(a));
   if (available.length < 3) return false;
 
-  // Find the best available player — this is what the offering team covets
   const targetPool = available.slice(0, round <= 2 ? 5 : 10);
-  const target = targetPool[Math.floor(Math.random() * targetPool.length)];
-  const posPrem = SIM_POS_PREMIUM[target.pos] || 1.0;
   const myPickVal = pickTradeValue(myPickObj.pick);
+  const maxGap = round === 1 ? 25 : round === 2 ? 18 : 12;
 
-  // Build map of later picks by team (only CPU teams)
+  // Build map of later picks by CPU team
   const laterPicks = MOCK_PICKS.filter(p => p.pick > myPickObj.pick && !p.playerId && pickOwner(p) !== myMockTeam);
   if (!laterPicks.length) return false;
   const teamPicksMap = {};
@@ -6049,42 +6066,59 @@ function checkForCPUTradeOffer(myPickObj) {
     teamPicksMap[owner].push(p);
   });
 
-  // Find teams that need the top available player and can pay up
-  const maxGap = round === 1 ? 25 : round === 2 ? 18 : 12;
-  const candidates = Object.entries(teamPicksMap).filter(([team, picks]) => {
+  // Build an offer for every qualifying team
+  const allOffers = [];
+  for (const [team, picks] of Object.entries(teamPicksMap)) {
     const needs = TEAM_NEEDS[team] || [];
-    if (!needs.includes(target.pos)) return false;
     const gap = picks[0].pick - myPickObj.pick;
-    if (gap <= 0 || gap > maxGap) return false;
-    // Don't offer if the team could still get the player naturally
-    if (gap <= 3) return false; // too close, no need to trade
+    if (gap <= 3 || gap > maxGap) continue;
+
+    // Find a player from the target pool this team covets
+    const teamTarget = targetPool.find(t => needs.includes(t.pos)) || targetPool[0];
+    const posPrem = SIM_POS_PREMIUM[teamTarget.pos] || 1.0;
     const canOffer = pickTradeValue(picks[0].pick) + (picks.length > 1 ? pickTradeValue(picks[1].pick) : 0);
-    return canOffer >= myPickVal * Math.min(posPrem, 1.5) * 0.80;
-  });
+    if (canOffer < myPickVal * Math.min(posPrem, 1.5) * 0.80) continue;
 
-  if (!candidates.length) return false;
+    const offer1 = picks[0];
+    let offer2 = null;
+    let totalOffer = pickTradeValue(offer1.pick);
+    if (totalOffer < myPickVal * Math.min(posPrem, 1.4) * 0.90 && picks.length > 1) {
+      offer2 = picks[1];
+      totalOffer += pickTradeValue(offer2.pick);
+    }
+    if (totalOffer < myPickVal * 0.85) continue;
 
-  const [offeringTeam, offeringPicks] = candidates[Math.floor(Math.random() * candidates.length)];
-  const offer1 = offeringPicks[0];
-  let offer2 = null;
-  let totalOffer = pickTradeValue(offer1.pick);
-
-  // Add second pick if needed to make it fair
-  if (totalOffer < myPickVal * Math.min(posPrem, 1.4) * 0.90 && offeringPicks.length > 1) {
-    offer2 = offeringPicks[1];
-    totalOffer += pickTradeValue(offer2.pick);
+    allOffers.push({ offeringTeam: team, myPick: myPickObj, offer1, offer2, target: teamTarget, totalOffer, myVal: myPickVal });
   }
 
-  // Don't show obviously bad offers — must cover at least 85% of value
-  if (totalOffer < myPickVal * 0.85) return false;
+  if (!allOffers.length) return false;
 
-  _pendingCPUTrade = { offeringTeam, myPick: myPickObj, offer1, offer2, target, totalOffer, myVal: myPickVal };
+  // Sort best offer first, then cap multi-offer realistically:
+  // 2nd offer shown 55% of the time when it exists, 3rd only 25%
+  allOffers.sort((a, b) => b.totalOffer - a.totalOffer);
+  const cap = allOffers.length >= 3 && Math.random() < 0.25 ? 3
+    : allOffers.length >= 2 && Math.random() < 0.55 ? 2
+    : 1;
+  _pendingCPUTrades = allOffers.slice(0, cap);
+
   showCPUTradeOfferModal();
   return true;
 }
 
 function showCPUTradeOfferModal() {
-  const { offeringTeam, myPick, offer1, offer2, target, totalOffer, myVal } = _pendingCPUTrade;
+  const offer = _pendingCPUTrades[_currentOfferIdx];
+  if (!offer) return;
+  const { offeringTeam, myPick, offer1, offer2, target, totalOffer, myVal } = offer;
+  const total = _pendingCPUTrades.length;
+
+  // Counter + navigation
+  const counterEl = document.getElementById('cpu-trade-offer-counter');
+  if (counterEl) counterEl.textContent = total > 1 ? `Offer ${_currentOfferIdx + 1} of ${total}` : '';
+  const prevBtn = document.getElementById('cpu-trade-prev-btn');
+  const nextBtn = document.getElementById('cpu-trade-next-btn');
+  if (prevBtn) prevBtn.style.display = (total > 1 && _currentOfferIdx > 0) ? '' : 'none';
+  if (nextBtn) nextBtn.style.display = (total > 1 && _currentOfferIdx < total - 1) ? '' : 'none';
+
   const fairness = totalOffer / myVal;
   const fairLabel = fairness >= 1.1 ? '<span style="color:var(--green);">Overpay — great value for you</span>'
     : fairness >= 0.95 ? '<span style="color:var(--gold);">Fair deal</span>'
@@ -6119,14 +6153,47 @@ function showCPUTradeOfferModal() {
     <div style="font-size:12px;">${fairLabel}</div>`;
 
   document.getElementById('cpu-trade-offer-modal').style.display = 'flex';
+  renderCPUTradeBanner();
+}
+
+function navigateCPUOffer(dir) {
+  _currentOfferIdx = Math.max(0, Math.min(_pendingCPUTrades.length - 1, _currentOfferIdx + dir));
+  showCPUTradeOfferModal();
+}
+
+function dismissCPUTradeOffer() {
+  document.getElementById('cpu-trade-offer-modal').style.display = 'none';
+  renderCPUTradeBanner();
+}
+
+function reopenCPUTradeModal() {
+  if (!_pendingCPUTrades.length) return;
+  showCPUTradeOfferModal();
+}
+
+function renderCPUTradeBanner() {
+  const banner = document.getElementById('cpu-trade-banner');
+  const textEl = document.getElementById('cpu-trade-banner-text');
+  if (!banner) return;
+  const remaining = _pendingCPUTrades.length;
+  if (!remaining || document.getElementById('cpu-trade-offer-modal').style.display === 'flex') {
+    banner.style.display = 'none';
+    return;
+  }
+  const cur = _pendingCPUTrades[_currentOfferIdx];
+  const label = remaining > 1
+    ? `${remaining} teams want to trade up to Pick #${cur.myPick.pick}`
+    : `${cur.offeringTeam} wants to trade up to Pick #${cur.myPick.pick}`;
+  textEl.textContent = label;
+  banner.style.display = 'flex';
 }
 
 function acceptCPUTradeOffer() {
-  if (!_pendingCPUTrade) return;
-  const { offeringTeam, myPick, offer1, offer2, totalOffer, myVal } = _pendingCPUTrade;
+  const offer = _pendingCPUTrades[_currentOfferIdx];
+  if (!offer) return;
+  const { offeringTeam, myPick, offer1, offer2, totalOffer, myVal } = offer;
   document.getElementById('cpu-trade-offer-modal').style.display = 'none';
 
-  // Execute the trade
   myPick.owner = offeringTeam;
   offer1.owner = myMockTeam;
   if (offer2) offer2.owner = myMockTeam;
@@ -6140,17 +6207,25 @@ function acceptCPUTradeOffer() {
     ts: Date.now(), simulated: false,
   });
 
+  _pendingCPUTrades = [];
   saveMockDraft();
+  renderCPUTradeBanner();
   showToast(`✅ Trade accepted — ${offeringTeam} now has Pick #${myPick.pick}. You gained Pick #${offer1.pick}${offer2 ? ` + #${offer2.pick}` : ''}`);
-  _pendingCPUTrade = null;
   simulateToMyPick();
 }
 
 function declineCPUTradeOffer() {
+  // Remove just the current offer; show the next one if any remain
+  _pendingCPUTrades.splice(_currentOfferIdx, 1);
+  _currentOfferIdx = Math.min(_currentOfferIdx, _pendingCPUTrades.length - 1);
   document.getElementById('cpu-trade-offer-modal').style.display = 'none';
-  _pendingCPUTrade = null;
-  // User makes their pick normally — nothing changes
-  renderMockDraft();
+  if (_pendingCPUTrades.length) {
+    showCPUTradeOfferModal();
+  } else {
+    _currentOfferIdx = 0;
+    renderCPUTradeBanner();
+    renderMockDraft();
+  }
 }
 
 // ── FULL REPORT ───────────────────────────────────────────────────────
@@ -6562,13 +6637,21 @@ document.addEventListener('click', e => {
 <!-- CPU TRADE OFFER MODAL -->
 <div id="cpu-trade-offer-modal" style="display:none;" class="modal-overlay">
   <div class="modal-box" style="max-width:500px;">
-    <div class="modal-header">
+    <div class="modal-header" style="justify-content:space-between;">
       <h2>🔄 Incoming Trade Offer</h2>
+      <span id="cpu-trade-offer-counter" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
     </div>
-    <div id="cpu-trade-offer-body" style="padding:20px;overflow-y:auto;max-height:65vh;"></div>
-    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;">
-      <button class="btn btn-outline" onclick="declineCPUTradeOffer()">✕ Decline</button>
-      <button class="btn btn-gold" onclick="acceptCPUTradeOffer()">✓ Accept Trade</button>
+    <div id="cpu-trade-offer-body" style="padding:20px;overflow-y:auto;max-height:60vh;"></div>
+    <div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+      <div style="display:flex;gap:8px;">
+        <button id="cpu-trade-prev-btn" class="btn btn-outline" style="font-size:12px;display:none;" onclick="navigateCPUOffer(-1)">← Prev</button>
+        <button id="cpu-trade-next-btn" class="btn btn-outline" style="font-size:12px;display:none;" onclick="navigateCPUOffer(1)">Next →</button>
+        <button class="btn btn-outline" style="font-size:12px;" onclick="dismissCPUTradeOffer()">👀 View Board</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline" onclick="declineCPUTradeOffer()">✕ Decline</button>
+        <button class="btn btn-gold" onclick="acceptCPUTradeOffer()">✓ Accept Trade</button>
+      </div>
     </div>
   </div>
 </div>
